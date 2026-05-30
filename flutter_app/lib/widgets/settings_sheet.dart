@@ -34,6 +34,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   late bool _autoOpenLast;
   late String _similarMode;
   late double _thumbSize;
+  late int _rescanSeconds;
 
   @override
   void initState() {
@@ -48,6 +49,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
     _autoOpenLast = s.autoOpenLast;
     _similarMode = s.defaultSimilarMode;
     _thumbSize = s.thumbSize;
+    _rescanSeconds = s.rescanSeconds;
   }
 
   @override
@@ -71,6 +73,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
       autoOpenLast: _autoOpenLast,
       defaultSimilarMode: _similarMode,
       thumbSize: _thumbSize,
+      rescanSeconds: _rescanSeconds,
     );
     await widget.state.updateSettings(next);
     if (mounted) Navigator.of(context).pop();
@@ -94,7 +97,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             ],
           ),
         ),
-        const Divider(height: 1),
+        const SizedBox(height: 4),
         Flexible(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
@@ -118,6 +121,20 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                     (v) => setState(() => _confirmDelete = v)),
                 _rowSwitch('실행 시 지난 폴더 자동 열기', _autoOpenLast,
                     (v) => setState(() => _autoOpenLast = v)),
+                _rowControl(
+                  '폴더 자동 재스캔 (새 사진 반영)',
+                  DropdownButton<int>(
+                    value: _rescanSeconds,
+                    onChanged: (v) => setState(() => _rescanSeconds = v ?? 60),
+                    items: const [
+                      DropdownMenuItem(value: 0, child: Text('끄기')),
+                      DropdownMenuItem(value: 30, child: Text('30초')),
+                      DropdownMenuItem(value: 60, child: Text('1분')),
+                      DropdownMenuItem(value: 300, child: Text('5분')),
+                      DropdownMenuItem(value: 600, child: Text('10분')),
+                    ],
+                  ),
+                ),
                 _rowControl(
                   '유사 사진 기본 분석',
                   DropdownButton<String>(
@@ -165,7 +182,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             ),
           ),
         ),
-        const Divider(height: 1),
+        const SizedBox(height: 4),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
           child: Row(

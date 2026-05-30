@@ -36,6 +36,9 @@ class AppSettings {
   /// 그리드 썸네일 기본 크기(px).
   double thumbSize;
 
+  /// 폴더 자동 재스캔 주기(초). 0 = 끄기. 새 사진/폴더를 주기적으로 반영.
+  int rescanSeconds;
+
   AppSettings({
     this.anthropicApiKey = '',
     this.anthropicBaseUrl = '',
@@ -49,6 +52,7 @@ class AppSettings {
     this.autoOpenLast = true,
     this.defaultSimilarMode = 'ai',
     this.thumbSize = 160,
+    this.rescanSeconds = 60,
   }) : roots = roots ?? const [];
 
   AppSettings copyWith({
@@ -64,6 +68,7 @@ class AppSettings {
     bool? autoOpenLast,
     String? defaultSimilarMode,
     double? thumbSize,
+    int? rescanSeconds,
   }) =>
       AppSettings(
         anthropicApiKey: anthropicApiKey ?? this.anthropicApiKey,
@@ -78,6 +83,7 @@ class AppSettings {
         autoOpenLast: autoOpenLast ?? this.autoOpenLast,
         defaultSimilarMode: defaultSimilarMode ?? this.defaultSimilarMode,
         thumbSize: thumbSize ?? this.thumbSize,
+        rescanSeconds: rescanSeconds ?? this.rescanSeconds,
       );
 
   Map<String, dynamic> toJson() => {
@@ -93,6 +99,7 @@ class AppSettings {
         'autoOpenLast': autoOpenLast,
         'defaultSimilarMode': defaultSimilarMode,
         'thumbSize': thumbSize,
+        'rescanSeconds': rescanSeconds,
       };
 
   static AppSettings fromJson(Map<String, dynamic> j) => AppSettings(
@@ -108,6 +115,7 @@ class AppSettings {
         autoOpenLast: j['autoOpenLast'] as bool? ?? true,
         defaultSimilarMode: j['defaultSimilarMode'] as String? ?? 'ai',
         thumbSize: (j['thumbSize'] as num?)?.toDouble() ?? 160,
+        rescanSeconds: (j['rescanSeconds'] as num?)?.toInt() ?? 60,
       );
 }
 

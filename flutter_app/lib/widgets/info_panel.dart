@@ -18,9 +18,7 @@ class InfoPanel extends StatelessWidget {
     final p = path;
     return Container(
       width: 260,
-      decoration: BoxDecoration(
-        border: Border(left: BorderSide(color: Theme.of(context).dividerColor)),
-      ),
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
       child: p == null
           ? const Center(
               child: Padding(

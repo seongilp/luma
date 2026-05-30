@@ -29,9 +29,6 @@ class SimilarView extends StatelessWidget {
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
-      ),
       child: Row(
         children: [
           const Text('분석 방식', style: TextStyle(fontSize: 12, color: Colors.grey)),

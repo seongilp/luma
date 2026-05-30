@@ -38,9 +38,6 @@ class MapView extends StatelessWidget {
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
-      ),
       child: Row(
         children: [
           _legend(Colors.blue, 'GPS ${state.realLocationCount}'),

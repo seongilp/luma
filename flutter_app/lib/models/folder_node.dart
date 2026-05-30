@@ -41,7 +41,8 @@ class _Mut {
       path: path,
       folderIndex: folderIndex,
       directCount: direct,
-      children: cs.map((m) => m.freeze()).toList(),
+      // 미디어가 하나도 없는 하위 폴더(빈 서브트리)는 트리에서 숨긴다.
+      children: cs.map((m) => m.freeze()).where((n) => n.totalCount > 0).toList(),
     );
   }
 }

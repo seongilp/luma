@@ -153,15 +153,14 @@ class _StatsViewState extends State<StatsView> {
       {required IconData icon, required String title, String? hint, required Widget child}) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).canvasColor,
+        color: Theme.of(context).colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
             child: Row(
               children: [
                 Icon(icon, size: 16, color: Colors.grey),
@@ -174,7 +173,6 @@ class _StatsViewState extends State<StatsView> {
               ],
             ),
           ),
-          Container(height: 1, color: Theme.of(context).dividerColor),
           Padding(padding: const EdgeInsets.all(16), child: child),
         ],
       ),

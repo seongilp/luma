@@ -51,7 +51,7 @@ Future<ExportPreset?> pickExportFormat(BuildContext context) async {
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Theme.of(ctx).dividerColor),
+                      color: Theme.of(ctx).colorScheme.surfaceContainerHigh,
                     ),
                     child: Row(
                       children: [

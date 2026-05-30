@@ -559,7 +559,7 @@ class _SidebarResizerState extends State<_SidebarResizer> {
           child: Center(
             child: Container(
               width: _hover ? 2 : 1,
-              color: _hover ? cs.primary : cs.outlineVariant,
+              color: _hover ? cs.primary : Colors.transparent,
             ),
           ),
         ),

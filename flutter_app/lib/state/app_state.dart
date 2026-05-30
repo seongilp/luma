@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -73,6 +74,8 @@ class AppState extends ChangeNotifier {
   List<String> _roots = [];
   // 스캔(루트 변경·재스캔) 세대. 분석 루프가 캡처해 도중 변경 시 중단 판정.
   int _scanGen = 0;
+  Timer? _rescanTimer; // 주기적 자동 재스캔
+  int _lastScanSig = 0; // 마지막 스캔의 파일 구성 시그니처
   List<FolderGroup> _folders = [];
   List<String> _allDirs = [];
   List<PhotoItem> _allItems = [];
@@ -349,18 +352,75 @@ class AppState extends ChangeNotifier {
   bool get confirmDelete => _settings.confirmDelete;
   bool get autoOpenLast => _settings.autoOpenLast;
 
-  /// 설정값을 실제 상태에 반영(테마·기본 유사분석·썸네일 크기).
+  /// 설정값을 실제 상태에 반영(테마·기본 유사분석·썸네일 크기·재스캔 주기).
   void _applySettings() {
     appThemeMode.value = themeModeFromString(_settings.themeMode);
     _similarMode =
         _settings.defaultSimilarMode == 'hash' ? SimilarMode.hash : SimilarMode.ai;
     _thumbSize = _settings.thumbSize;
+    _restartRescanTimer();
   }
 
   Future<void> updateSettings(AppSettings s) async {
     _settings = s;
     _applySettings();
     await _settingsStore.save(s);
+    _recompute();
+  }
+
+  // ── 자동 재스캔 ────────────────────────────────────────────
+  /// 현재 폴더 구성의 시그니처(경로+수정시각+크기). 변화 감지에 쓴다.
+  int _signature(List<FolderGroup> folders) {
+    var h = 17;
+    for (final f in folders) {
+      for (final it in f.items) {
+        h = (h * 31 + it.path.hashCode) & 0x3fffffff;
+        h = (h * 31 + it.modified.millisecondsSinceEpoch) & 0x3fffffff;
+        h = (h * 31 + it.sizeBytes) & 0x3fffffff;
+      }
+    }
+    return h;
+  }
+
+  void _restartRescanTimer() {
+    _rescanTimer?.cancel();
+    final secs = _settings.rescanSeconds;
+    if (secs <= 0) return; // 끄기
+    _rescanTimer =
+        Timer.periodic(Duration(seconds: secs), (_) => _autoRescan());
+  }
+
+  /// 루트를 다시 훑어 새/삭제된 사진을 반영한다. 분석 캐시(벡터·GPS 등)는 유지.
+  /// 파일 구성이 실제로 바뀐 경우에만 갱신해 불필요한 리빌드를 막는다.
+  Future<void> _autoRescan() async {
+    if (_loading || _analyzing || _geoLoading || _roots.isEmpty) return;
+    List<FolderGroup> folders;
+    List<String> dirs;
+    try {
+      final res = await _scanAll(_roots);
+      folders = res.folders;
+      dirs = res.dirs;
+    } catch (_) {
+      return;
+    }
+    final sig = _signature(folders);
+    if (sig == _lastScanSig) return; // 변화 없음 → 그대로
+    _lastScanSig = sig;
+    _scanGen++; // 진행 중 분석 무효화
+    final keepPath = _folderPath;
+    _folders = folders;
+    _allDirs = dirs;
+    _allItems = _folders.expand((f) => f.items).toList();
+    _hydrateFromCache(); // 새 항목만 캐시에서 보충(기존 분석 결과 유지)
+    // 항목 집합이 바뀌었으니 파생 묶음은 무효화(다시 볼 때 재계산)
+    _similarGroups = [];
+    _personGroups = [];
+    _peopleLoaded = false;
+    _datesLoaded = false;
+    if (keepPath != null) {
+      final idx = _folders.indexWhere((f) => f.path == keepPath);
+      if (idx >= 0) _selectedFolder = idx;
+    }
     _recompute();
   }
 
@@ -371,6 +431,12 @@ class AppState extends ChangeNotifier {
     await meta.load();
     await _cache.load();
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _rescanTimer?.cancel();
+    super.dispose();
   }
 
   /// 캐시에서 분석 결과를 미리 채운다 (재계산·재과금 방지).
@@ -449,6 +515,7 @@ class AppState extends ChangeNotifier {
       _folders = res.folders;
       _allDirs = res.dirs;
       _allItems = _folders.expand((f) => f.items).toList();
+      _lastScanSig = _signature(_folders);
       _hydrateFromCache(); // 이전 분석 결과 복원
       _error = _roots.isEmpty
           ? null
@@ -486,6 +553,7 @@ class AppState extends ChangeNotifier {
     _folders = res.folders;
     _allDirs = res.dirs;
     _allItems = _folders.expand((f) => f.items).toList();
+    _lastScanSig = _signature(_folders);
     _similarGroups = []; // 파일이 바뀌었으니 무효화
     _vectors.clear();
     _dates.clear();
