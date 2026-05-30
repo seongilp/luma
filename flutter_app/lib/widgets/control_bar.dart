@@ -33,8 +33,6 @@ class ControlBar extends StatelessWidget {
           const Spacer(),
           _filter(),
           const SizedBox(width: 10),
-          _search(),
-          const SizedBox(width: 10),
           _sort(),
           const SizedBox(width: 4),
           _orderButton(),
@@ -109,17 +107,6 @@ class ControlBar extends StatelessWidget {
   }
 
   // ── 보기 옵션 ─────────────────────────────────────────────
-  Widget _search() {
-    return SizedBox(
-      width: 180,
-      child: MacosSearchField(
-        placeholder: '이름 검색',
-        onChanged: state.setQuery,
-        results: const [],
-      ),
-    );
-  }
-
   Widget _sort() {
     return MacosPopupButton<SortField>(
       value: state.sortField,

@@ -154,6 +154,19 @@ class _HomePageState extends State<HomePage> {
                 title: Text(root != null ? _state.viewTitle : 'Photo Manager'),
                 titleWidth: 240,
                 actions: [
+                  CustomToolbarItem(
+                    inToolbarBuilder: (context) => Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: SizedBox(
+                        width: 200,
+                        child: MacosSearchField(
+                          placeholder: '이름 검색',
+                          onChanged: _state.setQuery,
+                          results: const [],
+                        ),
+                      ),
+                    ),
+                  ),
                   ToolBarIconButton(
                     label: '정보',
                     icon: const MacosIcon(CupertinoIcons.info_circle),
