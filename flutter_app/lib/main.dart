@@ -11,6 +11,7 @@ import 'package:macos_ui/macos_ui.dart';
 
 import 'state/app_state.dart';
 import 'widgets/control_bar.dart';
+import 'widgets/date_view.dart';
 import 'widgets/dialogs.dart';
 import 'widgets/folder_sidebar.dart';
 import 'widgets/info_panel.dart';
@@ -272,6 +273,8 @@ class _HomePageState extends State<HomePage> {
         return SimilarView(state: _state);
       case LibraryView.map:
         return MapView(state: _state);
+      case LibraryView.dates:
+        return DateView(state: _state);
       default:
         return PhotoGrid(state: _state);
     }

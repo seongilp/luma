@@ -9,6 +9,7 @@ import '../models/photo_item.dart';
 import '../models/photo_meta.dart';
 import '../models/sort_filter.dart';
 import '../services/claude_service.dart';
+import '../services/exif_reader.dart';
 import '../services/file_ops.dart';
 import '../services/geo.dart';
 import '../services/similarity.dart';
@@ -28,7 +29,10 @@ enum LocationKind { gps, content, claude }
 typedef LocatedPhoto = ({String path, LatLng pos, LocationKind kind});
 
 /// 사이드바에서 무엇을 보고 있는지.
-enum LibraryView { all, favorites, similar, map, folder }
+enum LibraryView { all, favorites, similar, map, dates, folder }
+
+/// 날짜 섹션(하루)과 그날 사진들.
+typedef DateSection = ({DateTime day, List<PhotoItem> items});
 
 /// 유사 사진 분석 방식.
 enum SimilarMode { ai, hash }
@@ -69,6 +73,10 @@ class AppState extends ChangeNotifier {
 
   // Vision 특징벡터 캐시 (유사도 + 내용기반 위치추정 공용)
   final Map<String, List<double>> _vectors = {};
+
+  // 날짜별 앨범 (촬영일, 없으면 파일 수정일)
+  final Map<String, DateTime> _dates = {};
+  bool _datesLoaded = false;
 
   // 진행 상태(분석 화면용): 무엇을·몇 번째·어떤 파일
   String _progressPhase = '';
@@ -182,12 +190,25 @@ class AppState extends ChangeNotifier {
     return out;
   }
 
+  /// 날짜 내림차순 섹션(하루 단위).
+  List<DateSection> get dateSections {
+    final byDay = <DateTime, List<PhotoItem>>{};
+    for (final it in _allItems) {
+      final d = _dates[it.path] ?? it.modified;
+      final day = DateTime(d.year, d.month, d.day);
+      byDay.putIfAbsent(day, () => []).add(it);
+    }
+    final days = byDay.keys.toList()..sort((a, b) => b.compareTo(a));
+    return [for (final day in days) (day: day, items: byDay[day]!)];
+  }
+
   /// 현재 사이드바 선택의 표시 이름 (툴바 제목용).
   String get viewTitle => switch (_view) {
         LibraryView.all => '모든 사진',
         LibraryView.favorites => '즐겨찾기',
         LibraryView.similar => '유사 사진',
         LibraryView.map => '지도',
+        LibraryView.dates => '날짜별',
         LibraryView.folder => selectedFolder?.displayName ?? '',
       };
 
@@ -198,6 +219,7 @@ class AppState extends ChangeNotifier {
           _allItems.where((it) => meta.get(it.path).favorite).toList(),
         LibraryView.similar => _similarGroups.expand((g) => g).toList(),
         LibraryView.map => const [],
+        LibraryView.dates => _allItems,
         LibraryView.folder => selectedFolder?.items ?? const [],
       };
 
@@ -226,6 +248,8 @@ class AppState extends ChangeNotifier {
     _allItems = [];
     _similarGroups = [];
     _vectors.clear();
+    _dates.clear();
+    _datesLoaded = false;
     _geo.clear();
     _estimatedGeo.clear();
     _claudeGeo.clear();
@@ -255,6 +279,8 @@ class AppState extends ChangeNotifier {
     _allItems = _folders.expand((f) => f.items).toList();
     _similarGroups = []; // 파일이 바뀌었으니 무효화
     _vectors.clear();
+    _dates.clear();
+    _datesLoaded = false;
     _geo.clear();
     _estimatedGeo.clear();
     _claudeGeo.clear();
@@ -295,6 +321,30 @@ class AppState extends ChangeNotifier {
     } else {
       _recompute();
     }
+  }
+
+  Future<void> showDates() async {
+    _view = LibraryView.dates;
+    _selection.clear();
+    _anchor = null;
+    notifyListeners();
+    if (!_datesLoaded && !_analyzing) await loadDates();
+  }
+
+  /// 모든 사진의 촬영일(EXIF, 없으면 수정일)을 읽는다.
+  Future<void> loadDates() async {
+    if (_analyzing || _allItems.isEmpty) return;
+    _analyzing = true;
+    notifyListeners();
+    for (var i = 0; i < _allItems.length; i++) {
+      _setProgress('날짜 읽는 중', i + 1, _allItems.length, _allItems[i].path);
+      final d = await readTakenDate(_allItems[i].path);
+      _dates[_allItems[i].path] = d ?? _allItems[i].modified;
+    }
+    _datesLoaded = true;
+    _analyzing = false;
+    _clearProgress();
+    notifyListeners();
   }
 
   Future<void> showMap() async {

@@ -52,6 +52,23 @@ String _humanSize(int bytes) {
   return '${s.toStringAsFixed(u == 0 ? 0 : 1)} ${units[u]}';
 }
 
+/// EXIF 촬영일(DateTimeOriginal). 없으면 null. 형식 "YYYY:MM:DD HH:MM:SS".
+Future<DateTime?> readTakenDate(String path) async {
+  try {
+    final bytes = await File(path).readAsBytes();
+    final tags = await readExifFromBytes(bytes);
+    if (tags.isEmpty) return null;
+    final s = tags['EXIF DateTimeOriginal']?.printable ?? tags['Image DateTime']?.printable;
+    if (s == null) return null;
+    final m = RegExp(r'(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})').firstMatch(s);
+    if (m == null) return null;
+    return DateTime(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!),
+        int.parse(m[4]!), int.parse(m[5]!), int.parse(m[6]!));
+  } catch (_) {
+    return null;
+  }
+}
+
 Future<ExifInfo> readInfo(String path) async {
   final file = File(path);
   final stat = await file.stat();
