@@ -16,6 +16,7 @@ import 'widgets/folder_sidebar.dart';
 import 'widgets/info_panel.dart';
 import 'widgets/map_view.dart';
 import 'widgets/photo_grid.dart';
+import 'widgets/settings_sheet.dart';
 import 'widgets/similar_view.dart';
 
 void main() {
@@ -208,6 +209,13 @@ class _HomePageState extends State<HomePage> {
                     icon: const MacosIcon(CupertinoIcons.folder_badge_plus),
                     tooltipMessage: '폴더 열기',
                     onPressed: _openFolder,
+                    showLabel: false,
+                  ),
+                  ToolBarIconButton(
+                    label: '설정',
+                    icon: const MacosIcon(CupertinoIcons.gear),
+                    tooltipMessage: '설정',
+                    onPressed: () => showSettings(context, _state),
                     showLabel: false,
                   ),
                 ],

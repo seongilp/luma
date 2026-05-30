@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../models/app_settings.dart';
 import '../models/folder_group.dart';
 import '../models/photo_item.dart';
 import '../models/photo_meta.dart';
@@ -80,7 +83,23 @@ class AppState extends ChangeNotifier {
   final Map<String, String> _claudePlace = {}; // Claude가 본 장소명
   bool _geoLoading = false;
   double _geoProgress = 0;
-  late final ClaudeService _claude = ClaudeService(ClaudeConfig.fromEnv());
+
+  // 설정 (Claude 자격증명·호출 상한). 저장소에서 로드, env로 폴백.
+  final SettingsStore _settingsStore = SettingsStore();
+  AppSettings _settings = AppSettings();
+
+  ClaudeConfig _claudeConfig() {
+    final env = Platform.environment;
+    String pick(String s, String e) => s.isNotEmpty ? s : (env[e] ?? '');
+    final base = pick(_settings.anthropicBaseUrl, 'ANTHROPIC_BASE_URL');
+    return ClaudeConfig(
+      baseUrl: (base.isEmpty ? 'https://api.anthropic.com' : base).replaceAll(RegExp(r'/$'), ''),
+      apiKey: pick(_settings.anthropicApiKey, 'ANTHROPIC_API_KEY'),
+      cfToken: pick(_settings.cfToken, 'CF_AIG_TOKEN'),
+    );
+  }
+
+  ClaudeService get _claude => ClaudeService(_claudeConfig());
 
   List<PhotoItem> _visible = [];
 
@@ -184,9 +203,19 @@ class AppState extends ChangeNotifier {
 
   List<PhotoItem> get visibleItems => _visible;
 
+  AppSettings get settings => _settings;
+
+  Future<void> updateSettings(AppSettings s) async {
+    _settings = s;
+    await _settingsStore.save(s);
+    notifyListeners();
+  }
+
   // ── 초기화 / 스캔 ──────────────────────────────────────────
   Future<void> init() async {
+    _settings = await _settingsStore.load();
     await meta.load();
+    notifyListeners();
   }
 
   Future<void> openRoot(String path) async {
@@ -381,7 +410,12 @@ class AppState extends ChangeNotifier {
     _analyzing = true;
     notifyListeners();
 
-    final groups = await _claudeClusters();
+    var groups = await _claudeClusters();
+    // 호출 상한: 큰 묶음(같은 장소 많이 찍은 곳) 우선으로 N개까지만.
+    final cap = _settings.claudeMaxCalls;
+    if (cap > 0 && groups.length > cap) {
+      groups = ([...groups]..sort((a, b) => b.length.compareTo(a.length))).take(cap).toList();
+    }
     for (var i = 0; i < groups.length; i++) {
       final rep = groups[i].first;
       _setProgress('위치 분석 (Claude)', i + 1, groups.length, rep.path);
