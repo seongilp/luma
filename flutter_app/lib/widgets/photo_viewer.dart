@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
@@ -29,16 +30,40 @@ class _PhotoViewerState extends State<PhotoViewer> {
   late int _index;
   final _focus = FocusNode();
 
+  // 컨트롤 auto-hide: 마우스가 멈추면 숨기고, 움직이면 다시 보인다.
+  bool _chromeVisible = true;
+  Timer? _chromeTimer;
+
   @override
   void initState() {
     super.initState();
     _index = widget.initialIndex;
     _controller = PageController(initialPage: _index);
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+    _pokeChrome();
   }
+
+  void _pokeChrome() {
+    _chromeTimer?.cancel();
+    _chromeTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _chromeVisible = false);
+    });
+    if (!_chromeVisible && mounted) setState(() => _chromeVisible = true);
+  }
+
+  /// 컨트롤을 페이드/클릭막기 처리. 숨김 상태면 보이지 않고 클릭도 통과.
+  Widget _fade(Widget child) => IgnorePointer(
+        ignoring: !_chromeVisible,
+        child: AnimatedOpacity(
+          opacity: _chromeVisible ? 1 : 0,
+          duration: const Duration(milliseconds: 220),
+          child: child,
+        ),
+      );
 
   @override
   void dispose() {
+    _chromeTimer?.cancel();
     _controller.dispose();
     _focus.dispose();
     super.dispose();
@@ -213,7 +238,12 @@ class _PhotoViewerState extends State<PhotoViewer> {
     return Focus(
       focusNode: _focus,
       onKeyEvent: _onKey,
-      child: Stack(
+      // Material로 감싸 기본 텍스트 스타일(노란 밑줄 제거)을 제공한다.
+      child: Material(
+        type: MaterialType.transparency,
+        child: MouseRegion(
+        onHover: (_) => _pokeChrome(),
+        child: Stack(
         children: [
           GestureDetector(
             onTap: () => Navigator.of(context).maybePop(),
@@ -222,7 +252,10 @@ class _PhotoViewerState extends State<PhotoViewer> {
           PageView.builder(
             controller: _controller,
             itemCount: widget.paths.length,
-            onPageChanged: (i) => setState(() => _index = i),
+            onPageChanged: (i) {
+              setState(() => _index = i);
+              _pokeChrome();
+            },
             itemBuilder: (context, i) {
               final path = widget.paths[i];
               if (isVideoFile(path)) return _VideoView(key: ValueKey(path), path: path);
@@ -245,21 +278,53 @@ class _PhotoViewerState extends State<PhotoViewer> {
             top: 16,
             left: 0,
             right: 0,
-            child: Center(
+            child: _fade(Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
+                  color: Colors.black.withValues(alpha: 0.55),
                   borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
                 ),
-                child: Text('${_index + 1} / ${widget.paths.length}   ·   Space: ♥ + 다음',
-                    style: const TextStyle(color: Colors.white, fontSize: 13)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('${_index + 1} / ${widget.paths.length}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.none)),
+                    Container(
+                      width: 1,
+                      height: 12,
+                      margin: const EdgeInsets.symmetric(horizontal: 10),
+                      color: Colors.white.withValues(alpha: 0.22),
+                    ),
+                    const Icon(CupertinoIcons.heart_fill,
+                        size: 11, color: Colors.white70),
+                    const SizedBox(width: 5),
+                    Text('Space 즐겨찾기 + 다음',
+                        style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 12,
+                            decoration: TextDecoration.none)),
+                  ],
+                ),
               ),
-            ),
+            )),
           ),
           if (!_filmstrip) ...[
-            _NavButton(alignment: Alignment.centerLeft, icon: Icons.chevron_left, onTap: () => _move(-1)),
-            _NavButton(alignment: Alignment.centerRight, icon: Icons.chevron_right, onTap: () => _move(1)),
+            _NavButton(
+                alignment: Alignment.centerLeft,
+                icon: Icons.chevron_left,
+                visible: _chromeVisible,
+                onTap: () => _move(-1)),
+            _NavButton(
+                alignment: Alignment.centerRight,
+                icon: Icons.chevron_right,
+                visible: _chromeVisible,
+                onTap: () => _move(1)),
           ],
           if (_filmstrip) _buildFilmstrip(),
           // 빠른 리뷰 하트 플래시
@@ -275,6 +340,8 @@ class _PhotoViewerState extends State<PhotoViewer> {
           ),
           _bottomBar(),
         ],
+        ),
+        ),
       ),
     );
   }
@@ -284,7 +351,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
       left: 0,
       right: 0,
       bottom: 70,
-      child: Container(
+      child: _fade(Container(
         height: 72,
         color: Colors.black.withValues(alpha: 0.5),
         child: ListView.builder(
@@ -320,7 +387,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
             );
           },
         ),
-      ),
+      )),
     );
   }
 
@@ -329,7 +396,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
       bottom: 20,
       left: 0,
       right: 0,
-      child: Center(
+      child: _fade(Center(
         child: ListenableBuilder(
           listenable: widget.state,
           builder: (context, _) {
@@ -397,7 +464,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
             );
           },
         ),
-      ),
+      )),
     );
   }
 }
@@ -480,7 +547,12 @@ class _NavButton extends StatelessWidget {
   final Alignment alignment;
   final IconData icon;
   final VoidCallback onTap;
-  const _NavButton({required this.alignment, required this.icon, required this.onTap});
+  final bool visible;
+  const _NavButton(
+      {required this.alignment,
+      required this.icon,
+      required this.onTap,
+      this.visible = true});
 
   @override
   Widget build(BuildContext context) {
@@ -488,16 +560,23 @@ class _NavButton extends StatelessWidget {
       alignment: alignment,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.4),
-              shape: BoxShape.circle,
+        child: IgnorePointer(
+          ignoring: !visible,
+          child: AnimatedOpacity(
+            opacity: visible ? 1 : 0,
+            duration: const Duration(milliseconds: 220),
+            child: GestureDetector(
+              onTap: onTap,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: Colors.white, size: 28),
+              ),
             ),
-            child: Icon(icon, color: Colors.white, size: 28),
           ),
         ),
       ),

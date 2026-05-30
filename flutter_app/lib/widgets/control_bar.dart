@@ -90,6 +90,10 @@ class ControlBar extends StatelessWidget {
 
   Future<void> _delete(BuildContext context) async {
     final n = state.selectedCount;
+    if (!state.confirmDelete) {
+      await state.deleteSelected();
+      return;
+    }
     final ok = await confirm(context,
         title: '휴지통으로 이동', message: '$n개의 사진을 휴지통으로 보낼까요?');
     if (ok) await state.deleteSelected();

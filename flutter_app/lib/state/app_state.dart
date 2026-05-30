@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:latlong2/latlong.dart';
 import 'package:path/path.dart' as p;
 
@@ -54,6 +55,15 @@ extension SimilarModeLabel on SimilarMode {
   String get label => this == SimilarMode.ai ? 'AI (정교)' : '해시 (빠름)';
 }
 
+/// 앱 테마 모드(시스템/라이트/다크). 최상위 MaterialApp이 구독한다.
+final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.system);
+
+ThemeMode themeModeFromString(String s) => switch (s) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
+
 /// 앱 전역 상태: 보기 선택(스마트/폴더), 보기 옵션(정렬·필터·검색·썸네일크기),
 /// 다중 선택, 사용자 메타데이터, 파일 작업.
 class AppState extends ChangeNotifier {
@@ -66,6 +76,7 @@ class AppState extends ChangeNotifier {
   List<PhotoItem> _allItems = [];
   LibraryView _view = LibraryView.all;
   int _selectedFolder = 0;
+  String? _folderPath; // 폴더 보기에서 보여줄 폴더(하위 포함) 경로
   bool _loading = false;
   String? _error;
 
@@ -80,6 +91,8 @@ class AppState extends ChangeNotifier {
   // 다중 선택 (절대 경로)
   final Set<String> _selection = {};
   String? _anchor;
+  int _cursor = 0; // 키보드 이동의 현재 위치(_visible 인덱스)
+  int gridColumns = 1; // 그리드 열 수(상하 이동용) — 그리드가 갱신
 
   // 유사 사진 분석
   List<List<PhotoItem>> _similarGroups = [];
@@ -163,6 +176,7 @@ class AppState extends ChangeNotifier {
 
   LibraryView get view => _view;
   bool get isFolderView => _view == LibraryView.folder;
+  String? get selectedFolderPath => _folderPath;
 
   /// 사이드바용 디렉토리 트리. 추가된 각 맥 폴더가 최상위 노드로 나란히, 빈 폴더 포함.
   List<FolderNode> get folderTree => [
@@ -288,7 +302,8 @@ class AppState extends ChangeNotifier {
         LibraryView.dates => '날짜별',
         LibraryView.people => '인물',
         LibraryView.stats => '통계',
-        LibraryView.folder => selectedFolder?.displayName ?? '',
+        LibraryView.folder =>
+          _folderPath == null ? '' : p.basename(_folderPath!),
       };
 
   /// 정렬/검색 전, 현재 보기의 원본 항목들.
@@ -301,7 +316,13 @@ class AppState extends ChangeNotifier {
         LibraryView.dates => _allItems,
         LibraryView.people => _personGroups.expand((g) => g).toList(),
         LibraryView.stats => const [],
-        LibraryView.folder => selectedFolder?.items ?? const [],
+        LibraryView.folder => _folderPath == null
+            ? const []
+            : _allItems
+                .where((it) =>
+                    p.isWithin(_folderPath!, it.path) ||
+                    p.dirname(it.path) == _folderPath)
+                .toList(),
       };
 
   List<PhotoItem> get visibleItems => _visible;
@@ -323,15 +344,28 @@ class AppState extends ChangeNotifier {
   void zoomOutUi() => setUiScale(uiScale - 0.15);
   void resetUiScale() => setUiScale(1.0);
 
+  bool get confirmDelete => _settings.confirmDelete;
+  bool get autoOpenLast => _settings.autoOpenLast;
+
+  /// 설정값을 실제 상태에 반영(테마·기본 유사분석·썸네일 크기).
+  void _applySettings() {
+    appThemeMode.value = themeModeFromString(_settings.themeMode);
+    _similarMode =
+        _settings.defaultSimilarMode == 'hash' ? SimilarMode.hash : SimilarMode.ai;
+    _thumbSize = _settings.thumbSize;
+  }
+
   Future<void> updateSettings(AppSettings s) async {
     _settings = s;
+    _applySettings();
     await _settingsStore.save(s);
-    notifyListeners();
+    _recompute();
   }
 
   // ── 초기화 / 스캔 ──────────────────────────────────────────
   Future<void> init() async {
     _settings = await _settingsStore.load();
+    _applySettings();
     await meta.load();
     await _cache.load();
     notifyListeners();
@@ -860,8 +894,15 @@ class AppState extends ChangeNotifier {
 
   void selectFolder(int index) {
     if (index < 0 || index >= _folders.length) return;
+    selectFolderPath(_folders[index].path);
+  }
+
+  /// 트리에서 폴더를 고르면 그 폴더(하위 폴더 포함)의 사진만 보여준다.
+  void selectFolderPath(String path) {
     _view = LibraryView.folder;
-    _selectedFolder = index;
+    _folderPath = path;
+    final idx = _folders.indexWhere((f) => f.path == path);
+    if (idx >= 0) _selectedFolder = idx;
     _selection.clear();
     _anchor = null;
     _recompute();
@@ -902,26 +943,31 @@ class AppState extends ChangeNotifier {
       ascending: _ascending,
       ratingFilter: _ratingFilter,
       meta: meta,
-      // 단일 폴더가 아니라 여러 폴더를 합쳐 보는 뷰에서는 폴더별로 묶어 보여준다.
-      groupByFolder: !isFolderView,
+      // 여러 폴더가 섞이는 뷰에서 폴더별로 묶어 보여준다(단일 폴더면 무영향).
+      groupByFolder: true,
     );
     // 더 이상 보이지 않는 선택 항목 정리
     _selection.removeWhere((p) => !_visible.any((it) => it.path == p));
+    if (_cursor >= _visible.length) _cursor = _visible.isEmpty ? 0 : _visible.length - 1;
     notifyListeners();
   }
 
   // ── 선택 ──────────────────────────────────────────────────
+  int _indexOf(String path) => _visible.indexWhere((e) => e.path == path);
+
   void selectOnly(String path) {
     _selection
       ..clear()
       ..add(path);
     _anchor = path;
+    _cursor = _indexOf(path);
     notifyListeners();
   }
 
   void toggleSelect(String path) {
     if (!_selection.add(path)) _selection.remove(path);
     _anchor = path;
+    _cursor = _indexOf(path);
     notifyListeners();
   }
 
@@ -943,6 +989,37 @@ class AppState extends ChangeNotifier {
     for (var i = lo; i <= hi; i++) {
       _selection.add(paths[i]);
     }
+    _cursor = b;
+    notifyListeners();
+  }
+
+  /// 현재 키보드 커서 위치의 경로(미리보기·이동 기준). 없으면 null.
+  String? get cursorPath =>
+      (_cursor >= 0 && _cursor < _visible.length) ? _visible[_cursor].path : null;
+  int get cursorIndex => _cursor.clamp(0, _visible.isEmpty ? 0 : _visible.length - 1);
+
+  /// 방향키 이동. [extend]면 앵커~커서 범위를 선택, 아니면 한 항목만 선택.
+  void moveCursor(int delta, {bool extend = false}) {
+    if (_visible.isEmpty) return;
+    final paths = _visible.map((e) => e.path).toList();
+    final from = (_cursor >= 0 && _cursor < paths.length) ? _cursor : 0;
+    final to = (from + delta).clamp(0, paths.length - 1);
+    _cursor = to;
+    if (extend) {
+      var a = _anchor == null ? from : paths.indexOf(_anchor!);
+      if (a < 0) a = from;
+      _anchor = paths[a];
+      final lo = a < to ? a : to;
+      final hi = a < to ? to : a;
+      _selection
+        ..clear()
+        ..addAll(paths.sublist(lo, hi + 1));
+    } else {
+      _selection
+        ..clear()
+        ..add(paths[to]);
+      _anchor = paths[to];
+    }
     notifyListeners();
   }
 
@@ -950,6 +1027,14 @@ class AppState extends ChangeNotifier {
     _selection
       ..clear()
       ..addAll(_visible.map((e) => e.path));
+    notifyListeners();
+  }
+
+  /// 드래그(마퀴) 선택용: 선택 집합을 통째로 교체한다.
+  void setSelection(Iterable<String> paths) {
+    _selection
+      ..clear()
+      ..addAll(paths);
     notifyListeners();
   }
 

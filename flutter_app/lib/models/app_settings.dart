@@ -21,6 +21,21 @@ class AppSettings {
   /// 전체 UI 배율 (접근성 확대). 1.0 = 기본.
   double uiScale;
 
+  /// 테마 모드: 'system' | 'light' | 'dark'.
+  String themeMode;
+
+  /// 삭제 시 확인 대화상자를 띄울지.
+  bool confirmDelete;
+
+  /// 실행 시 지난번 추가한 폴더를 자동으로 다시 열지.
+  bool autoOpenLast;
+
+  /// 유사 사진 기본 분석 방식: 'ai' | 'hash'.
+  String defaultSimilarMode;
+
+  /// 그리드 썸네일 기본 크기(px).
+  double thumbSize;
+
   AppSettings({
     this.anthropicApiKey = '',
     this.anthropicBaseUrl = '',
@@ -29,6 +44,11 @@ class AppSettings {
     this.lastRoot = '',
     List<String>? roots,
     this.uiScale = 1.0,
+    this.themeMode = 'system',
+    this.confirmDelete = true,
+    this.autoOpenLast = true,
+    this.defaultSimilarMode = 'ai',
+    this.thumbSize = 160,
   }) : roots = roots ?? const [];
 
   AppSettings copyWith({
@@ -39,6 +59,11 @@ class AppSettings {
     String? lastRoot,
     List<String>? roots,
     double? uiScale,
+    String? themeMode,
+    bool? confirmDelete,
+    bool? autoOpenLast,
+    String? defaultSimilarMode,
+    double? thumbSize,
   }) =>
       AppSettings(
         anthropicApiKey: anthropicApiKey ?? this.anthropicApiKey,
@@ -48,6 +73,11 @@ class AppSettings {
         lastRoot: lastRoot ?? this.lastRoot,
         roots: roots ?? this.roots,
         uiScale: uiScale ?? this.uiScale,
+        themeMode: themeMode ?? this.themeMode,
+        confirmDelete: confirmDelete ?? this.confirmDelete,
+        autoOpenLast: autoOpenLast ?? this.autoOpenLast,
+        defaultSimilarMode: defaultSimilarMode ?? this.defaultSimilarMode,
+        thumbSize: thumbSize ?? this.thumbSize,
       );
 
   Map<String, dynamic> toJson() => {
@@ -58,6 +88,11 @@ class AppSettings {
         'lastRoot': lastRoot,
         'roots': roots,
         'uiScale': uiScale,
+        'themeMode': themeMode,
+        'confirmDelete': confirmDelete,
+        'autoOpenLast': autoOpenLast,
+        'defaultSimilarMode': defaultSimilarMode,
+        'thumbSize': thumbSize,
       };
 
   static AppSettings fromJson(Map<String, dynamic> j) => AppSettings(
@@ -68,6 +103,11 @@ class AppSettings {
         lastRoot: j['lastRoot'] as String? ?? '',
         roots: (j['roots'] as List?)?.whereType<String>().toList() ?? const [],
         uiScale: (j['uiScale'] as num?)?.toDouble() ?? 1.0,
+        themeMode: j['themeMode'] as String? ?? 'system',
+        confirmDelete: j['confirmDelete'] as bool? ?? true,
+        autoOpenLast: j['autoOpenLast'] as bool? ?? true,
+        defaultSimilarMode: j['defaultSimilarMode'] as String? ?? 'ai',
+        thumbSize: (j['thumbSize'] as num?)?.toDouble() ?? 160,
       );
 }
 

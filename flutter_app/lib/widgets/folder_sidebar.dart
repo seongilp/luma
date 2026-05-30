@@ -138,9 +138,8 @@ class _FolderSidebarState extends State<FolderSidebar> {
   List<Widget> _treeRows(FolderNode node, int depth) {
     final state = widget.state;
     final expanded = _expanded.contains(node.path);
-    final selected = state.isFolderView &&
-        node.folderIndex != null &&
-        state.selectedIndex == node.folderIndex;
+    final selected =
+        state.isFolderView && state.selectedFolderPath == node.path;
 
     final rows = <Widget>[
       _TreeRow(
@@ -161,12 +160,11 @@ class _FolderSidebarState extends State<FolderSidebar> {
                 })
             : null,
         onTap: () {
-          if (node.folderIndex != null) {
-            state.selectFolder(node.folderIndex!);
-          } else if (node.hasChildren) {
-            setState(() {
-              expanded ? _expanded.remove(node.path) : _expanded.add(node.path);
-            });
+          // 폴더를 고르면 그 폴더(하위 포함)의 사진만 보여준다.
+          state.selectFolderPath(node.path);
+          // 하위가 있으면 펼쳐서 트리 탐색도 함께.
+          if (node.hasChildren && !expanded) {
+            setState(() => _expanded.add(node.path));
           }
         },
       ),
@@ -211,7 +209,7 @@ class _TreeRow extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 1.5),
-        padding: EdgeInsets.only(left: 4.0 + depth * 14, right: 8, top: 6, bottom: 6),
+        padding: EdgeInsets.only(left: 6.0 + depth * 16, right: 8, top: 6, bottom: 6),
         decoration: BoxDecoration(
           color: selected ? accent.withValues(alpha: 0.16) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
@@ -223,16 +221,17 @@ class _TreeRow extends StatelessWidget {
               onTap: onToggle,
               behavior: HitTestBehavior.opaque,
               child: SizedBox(
-                width: 14,
+                width: 18,
                 child: node.hasChildren
                     ? Icon(
                         expanded ? CupertinoIcons.chevron_down : CupertinoIcons.chevron_right,
-                        size: 10,
+                        size: 11,
                         color: tertiary,
                       )
                     : const SizedBox(),
               ),
             ),
+            const SizedBox(width: 4),
             Icon(
               node.hasChildren && expanded
                   ? CupertinoIcons.folder_open
@@ -240,7 +239,7 @@ class _TreeRow extends StatelessWidget {
               size: 15,
               color: accent,
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 9),
             Expanded(
               child: Text(
                 node.name,
