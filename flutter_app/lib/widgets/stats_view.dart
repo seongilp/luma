@@ -1,7 +1,5 @@
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
-import 'package:flutter/material.dart' show Colors;
-import 'package:flutter/widgets.dart';
-import 'package:macos_ui/macos_ui.dart';
+import 'package:flutter/material.dart';
 
 import '../state/app_state.dart';
 import 'scroll_area.dart';
@@ -155,9 +153,9 @@ class _StatsViewState extends State<StatsView> {
       {required IconData icon, required String title, String? hint, required Widget child}) {
     return Container(
       decoration: BoxDecoration(
-        color: MacosTheme.of(context).canvasColor,
+        color: Theme.of(context).canvasColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: MacosTheme.of(context).dividerColor),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,7 +164,7 @@ class _StatsViewState extends State<StatsView> {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
             child: Row(
               children: [
-                MacosIcon(icon, size: 16, color: Colors.grey),
+                Icon(icon, size: 16, color: Colors.grey),
                 const SizedBox(width: 8),
                 Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 if (hint != null) ...[
@@ -176,7 +174,7 @@ class _StatsViewState extends State<StatsView> {
               ],
             ),
           ),
-          Container(height: 1, color: MacosTheme.of(context).dividerColor),
+          Container(height: 1, color: Theme.of(context).dividerColor),
           Padding(padding: const EdgeInsets.all(16), child: child),
         ],
       ),

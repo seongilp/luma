@@ -3,7 +3,6 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:macos_ui/macos_ui.dart';
 
 import 'package:path/path.dart' as p;
 
@@ -132,7 +131,7 @@ class _ListHeader extends StatelessWidget {
       height: 30,
       padding: const EdgeInsets.only(left: 16, right: 24),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: MacosTheme.of(context).dividerColor)),
+        border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
       ),
       child: Row(
         children: [
@@ -158,10 +157,10 @@ class _ListHeader extends StatelessWidget {
               style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: active ? MacosTheme.of(context).primaryColor : null)),
+                  color: active ? Theme.of(context).colorScheme.primary : null)),
           if (active)
             Icon(state.ascending ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down,
-                size: 10, color: MacosTheme.of(context).primaryColor),
+                size: 10, color: Theme.of(context).colorScheme.primary),
         ],
       ),
     );
@@ -200,7 +199,7 @@ class _ManageRowState extends State<_ManageRow> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final selected = widget.state.isSelected(item.path);
-    final accent = MacosTheme.of(context).primaryColor;
+    final accent = Theme.of(context).colorScheme.primary;
     final bg = selected
         ? accent.withValues(alpha: 0.22)
         : _hover

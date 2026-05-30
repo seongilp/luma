@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
-import 'package:flutter/material.dart' show Colors;
-import 'package:flutter/widgets.dart';
-import 'package:macos_ui/macos_ui.dart';
+import 'package:flutter/material.dart';
 
 import '../state/app_state.dart';
 
@@ -62,7 +60,7 @@ class _AnalysisOverlayState extends State<AnalysisOverlay>
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              MacosIcon(
+              Icon(
                 isLocation
                     ? CupertinoIcons.map_pin_ellipse
                     : CupertinoIcons.sparkles,
@@ -98,7 +96,7 @@ class _AnalysisOverlayState extends State<AnalysisOverlay>
           // 진행 바 + %
           SizedBox(
             width: 260,
-            child: ProgressBar(value: s.progressFraction * 100),
+            child: LinearProgressIndicator(value: s.progressFraction),
           ),
           const SizedBox(height: 6),
           Text('${(s.progressFraction * 100).round()}%   ·   $msg',

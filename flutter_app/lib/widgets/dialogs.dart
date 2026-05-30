@@ -1,6 +1,4 @@
-import 'package:flutter/cupertino.dart' show CupertinoIcons;
-import 'package:flutter/widgets.dart';
-import 'package:macos_ui/macos_ui.dart';
+import 'package:flutter/material.dart';
 
 /// 텍스트 입력 다이얼로그 (이름 변경 등). 취소 시 null.
 Future<String?> promptText(
@@ -11,26 +9,24 @@ Future<String?> promptText(
 }) async {
   final controller = TextEditingController(text: initial);
   String? result;
-  await showMacosAlertDialog(
+  await showDialog(
     context: context,
-    builder: (ctx) => MacosAlertDialog(
-      appIcon: const MacosIcon(CupertinoIcons.pencil, size: 48),
+    builder: (ctx) => AlertDialog(
       title: Text(title),
-      message: MacosTextField(controller: controller, autofocus: true),
-      primaryButton: PushButton(
-        controlSize: ControlSize.large,
-        onPressed: () {
-          result = controller.text.trim();
-          Navigator.of(ctx).pop();
-        },
-        child: Text(confirmLabel),
-      ),
-      secondaryButton: PushButton(
-        controlSize: ControlSize.large,
-        secondary: true,
-        onPressed: () => Navigator.of(ctx).pop(),
-        child: const Text('취소'),
-      ),
+      content: TextField(controller: controller, autofocus: true),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: () {
+            result = controller.text.trim();
+            Navigator.of(ctx).pop();
+          },
+          child: Text(confirmLabel),
+        ),
+      ],
     ),
   );
   final r = result;
@@ -45,26 +41,24 @@ Future<bool> confirm(
   String confirmLabel = '삭제',
 }) async {
   bool ok = false;
-  await showMacosAlertDialog(
+  await showDialog(
     context: context,
-    builder: (ctx) => MacosAlertDialog(
-      appIcon: const MacosIcon(CupertinoIcons.exclamationmark_triangle, size: 48),
+    builder: (ctx) => AlertDialog(
       title: Text(title),
-      message: Text(message, textAlign: TextAlign.center),
-      primaryButton: PushButton(
-        controlSize: ControlSize.large,
-        onPressed: () {
-          ok = true;
-          Navigator.of(ctx).pop();
-        },
-        child: Text(confirmLabel),
-      ),
-      secondaryButton: PushButton(
-        controlSize: ControlSize.large,
-        secondary: true,
-        onPressed: () => Navigator.of(ctx).pop(),
-        child: const Text('취소'),
-      ),
+      content: Text(message, textAlign: TextAlign.center),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: () {
+            ok = true;
+            Navigator.of(ctx).pop();
+          },
+          child: Text(confirmLabel),
+        ),
+      ],
     ),
   );
   return ok;

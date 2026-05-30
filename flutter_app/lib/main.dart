@@ -2,13 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Colors, ThemeMode;
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart';
 import 'package:file_selector/file_selector.dart';
-import 'package:macos_ui/macos_ui.dart';
 
+import 'theme/app_theme.dart';
 import 'services/zip_service.dart';
 import 'state/app_state.dart';
 import 'widgets/control_bar.dart';
@@ -32,10 +32,10 @@ class PhotoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MacosApp(
+    return MaterialApp(
       title: 'LUMA',
-      theme: MacosThemeData.light(),
-      darkTheme: MacosThemeData.dark(),
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
       debugShowCheckedModeBanner: false,
       home: const HomePage(),
@@ -66,9 +66,14 @@ class _HomePageState extends State<HomePage> {
     await _state.init();
     final dir = Platform.environment['PHOTO_DIR'];
     if (dir == null || dir.isEmpty) {
-      // 환경변수 없으면 마지막으로 연 폴더 자동 열기
-      final last = _state.settings.lastRoot;
-      if (last.isNotEmpty) await _state.openRoot(last);
+      // 환경변수 없으면 지난번에 추가한 폴더들 자동 복원
+      final saved = _state.settings.roots;
+      if (saved.isNotEmpty) {
+        await _state.setRoots(saved);
+      } else {
+        final last = _state.settings.lastRoot; // 구버전 설정 마이그레이션
+        if (last.isNotEmpty) await _state.openRoot(last);
+      }
       return;
     }
     {
@@ -136,9 +141,10 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  // 맥 폴더를 라이브러리에 추가(기존 위치 유지). 여러 폴더를 합쳐서 본다.
   Future<void> _openFolder() async {
-    final dir = await getDirectoryPath(confirmButtonText: '선택');
-    if (dir != null) await _state.openRoot(dir);
+    final dir = await getDirectoryPath(confirmButtonText: '추가');
+    if (dir != null) await _state.addRoot(dir);
   }
 
   Future<void> _openZip() async {
@@ -214,86 +220,36 @@ class _HomePageState extends State<HomePage> {
     return ListenableBuilder(
       listenable: _state,
       builder: (context, _) {
-        final root = _state.root;
         return MediaQuery(
           data: MediaQuery.of(context)
               .copyWith(textScaler: TextScaler.linear(_state.uiScale)),
           child: Focus(
             onKeyEvent: _onZoomKey,
             child: RepaintBoundary(
-          key: _repaintKey,
-          child: MacosWindow(
-            sidebar: Sidebar(
-              minWidth: 240,
-              builder: (context, scrollController) =>
-                  FolderSidebar(state: _state, scrollController: scrollController),
-              bottom: Padding(
-                padding: const EdgeInsets.all(8),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: PushButton(
-                    controlSize: ControlSize.large,
-                    onPressed: _openFolder,
-                    child: const Text('폴더 열기'),
-                  ),
-                ),
-              ),
-            ),
-            child: MacosScaffold(
-              toolBar: ToolBar(
-                title: Text(root != null ? _state.viewTitle : 'LUMA'),
-                titleWidth: 240,
-                actions: [
-                  CustomToolbarItem(
-                    inToolbarBuilder: (context) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: SizedBox(
-                        width: 200,
-                        child: MacosSearchField(
-                          placeholder: '이름 검색',
-                          onChanged: _state.setQuery,
-                          results: const [],
-                        ),
+              key: _repaintKey,
+              child: Scaffold(
+                body: Row(
+                  children: [
+                    _Sidebar(state: _state, onAddFolder: _openFolder),
+                    const VerticalDivider(width: 1),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _TopBar(
+                            state: _state,
+                            onToggleInfo: () =>
+                                setState(() => _showInfo = !_showInfo),
+                            onAddFolder: _openFolder,
+                            onOpenZip: _openZip,
+                            onSettings: () => showSettings(context, _state),
+                          ),
+                          Expanded(child: _buildBody()),
+                        ],
                       ),
                     ),
-                  ),
-                  ToolBarIconButton(
-                    label: '정보',
-                    icon: const MacosIcon(CupertinoIcons.info_circle),
-                    tooltipMessage: '정보 패널',
-                    onPressed: () => setState(() => _showInfo = !_showInfo),
-                    showLabel: false,
-                  ),
-                  ToolBarIconButton(
-                    label: '폴더 열기',
-                    icon: const MacosIcon(CupertinoIcons.folder_badge_plus),
-                    tooltipMessage: '폴더 열기',
-                    onPressed: _openFolder,
-                    showLabel: false,
-                  ),
-                  ToolBarIconButton(
-                    label: 'ZIP 열기',
-                    icon: const MacosIcon(CupertinoIcons.archivebox),
-                    tooltipMessage: 'ZIP 열기',
-                    onPressed: _openZip,
-                    showLabel: false,
-                  ),
-                  ToolBarIconButton(
-                    label: '설정',
-                    icon: const MacosIcon(CupertinoIcons.gear),
-                    tooltipMessage: '설정',
-                    onPressed: () => showSettings(context, _state),
-                    showLabel: false,
-                  ),
-                ],
-              ),
-              children: [
-                ContentArea(
-                  builder: (context, scrollController) => _buildBody(),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
             ),
           ),
         );
@@ -302,9 +258,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildBody() {
-    if (_state.loading) return const Center(child: ProgressCircle());
+    if (_state.loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
     if (_state.root == null) {
-      return _EmptyState(message: '시작하려면 사진 폴더를 여세요.', onOpen: _openFolder);
+      return _EmptyState(message: '시작하려면 폴더를 추가하세요.', onOpen: _openFolder);
     }
     if (_state.folders.isEmpty) {
       return _EmptyState(
@@ -360,18 +318,173 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const MacosIcon(CupertinoIcons.photo_on_rectangle, size: 56, color: Colors.grey),
+          Icon(CupertinoIcons.photo_on_rectangle,
+              size: 56, color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
           const SizedBox(height: 14),
-          Text(message, style: const TextStyle(color: Colors.grey, fontSize: 15)),
+          Text(message,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15)),
           const SizedBox(height: 18),
-          PushButton(
-            controlSize: ControlSize.large,
+          FilledButton.icon(
             onPressed: onOpen,
-            child: const Text('폴더 열기'),
+            icon: const Icon(CupertinoIcons.add, size: 18),
+            label: const Text('폴더 추가'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 좌측 사이드바: 폴더 트리(스크롤) + 하단 '폴더 추가' 버튼.
+class _Sidebar extends StatefulWidget {
+  final AppState state;
+  final VoidCallback onAddFolder;
+  const _Sidebar({required this.state, required this.onAddFolder});
+
+  @override
+  State<_Sidebar> createState() => _SidebarState();
+}
+
+class _SidebarState extends State<_Sidebar> {
+  final ScrollController _sc = ScrollController();
+
+  @override
+  void dispose() {
+    _sc.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: 260,
+      color: cs.surfaceContainerLow,
+      child: Column(
+        children: [
+          Expanded(
+            child: FolderSidebar(state: widget.state, scrollController: _sc),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: widget.onAddFolder,
+                icon: const Icon(CupertinoIcons.add, size: 18),
+                label: const Text('폴더 추가'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 상단 바: 제목 + 이름 검색 + 동작 아이콘들.
+class _TopBar extends StatelessWidget {
+  final AppState state;
+  final VoidCallback onToggleInfo;
+  final VoidCallback onAddFolder;
+  final VoidCallback onOpenZip;
+  final VoidCallback onSettings;
+  const _TopBar({
+    required this.state,
+    required this.onToggleInfo,
+    required this.onAddFolder,
+    required this.onOpenZip,
+    required this.onSettings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 56,
+      color: cs.surface,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Text(
+            state.root != null ? state.viewTitle : 'LUMA',
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const Spacer(),
+          SizedBox(
+            width: 230,
+            height: 36,
+            child: TextField(
+              onChanged: state.setQuery,
+              textAlignVertical: TextAlignVertical.center,
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: '이름 검색',
+                hintStyle: TextStyle(
+                    fontSize: 13, color: cs.onSurfaceVariant),
+                isDense: true,
+                filled: true,
+                fillColor: cs.surfaceContainerHighest,
+                prefixIcon: Icon(CupertinoIcons.search,
+                    size: 16, color: cs.onSurfaceVariant),
+                prefixIconConstraints:
+                    const BoxConstraints(minWidth: 34, minHeight: 34),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(color: cs.primary, width: 1.4),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          IconButtonTheme(
+            data: IconButtonThemeData(
+              style: IconButton.styleFrom(
+                iconSize: 19,
+                visualDensity: VisualDensity.compact,
+                foregroundColor: cs.onSurfaceVariant,
+              ),
+            ),
+            child: Row(children: [
+              IconButton(
+                tooltip: '정보 패널',
+                onPressed: onToggleInfo,
+                icon: const Icon(CupertinoIcons.info_circle),
+              ),
+              IconButton(
+                tooltip: '폴더 추가 (기존 유지)',
+                onPressed: onAddFolder,
+                icon: const Icon(CupertinoIcons.folder_badge_plus),
+              ),
+              IconButton(
+                tooltip: 'ZIP 열기',
+                onPressed: onOpenZip,
+                icon: const Icon(CupertinoIcons.archivebox),
+              ),
+              IconButton(
+                tooltip: '설정',
+                onPressed: onSettings,
+                icon: const Icon(CupertinoIcons.gear),
+              ),
+            ]),
           ),
         ],
       ),

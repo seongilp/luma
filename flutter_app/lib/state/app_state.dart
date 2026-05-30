@@ -60,7 +60,7 @@ class AppState extends ChangeNotifier {
   final MetaStore meta = MetaStore();
   final AnalysisCache _cache = AnalysisCache();
 
-  String? _root;
+  List<String> _roots = [];
   List<FolderGroup> _folders = [];
   List<String> _allDirs = [];
   List<PhotoItem> _allItems = [];
@@ -132,7 +132,10 @@ class AppState extends ChangeNotifier {
   List<PhotoItem> _visible = [];
 
   // ── getters ────────────────────────────────────────────────
-  String? get root => _root;
+  /// 추가된 맥 폴더(위치)들. 비어 있으면 라이브러리 없음.
+  List<String> get roots => List.unmodifiable(_roots);
+  /// 하위 호환: 첫 루트(없으면 null). 창 제목 등에서 사용.
+  String? get root => _roots.isEmpty ? null : _roots.first;
   List<FolderGroup> get folders => _folders;
   int get selectedIndex => _selectedFolder;
   bool get loading => _loading;
@@ -161,9 +164,10 @@ class AppState extends ChangeNotifier {
   LibraryView get view => _view;
   bool get isFolderView => _view == LibraryView.folder;
 
-  /// 사이드바용 디렉토리 트리 (루트 1개, 빈 폴더 포함).
-  List<FolderNode> get folderTree =>
-      _root == null ? const [] : buildFolderTree(_root!, _folders, _allDirs);
+  /// 사이드바용 디렉토리 트리. 추가된 각 맥 폴더가 최상위 노드로 나란히, 빈 폴더 포함.
+  List<FolderNode> get folderTree => [
+        for (final r in _roots) ...buildFolderTree(r, _folders, _allDirs),
+      ];
 
   int get allCount => _allItems.length;
   int get favoriteCount =>
@@ -356,8 +360,34 @@ class AppState extends ChangeNotifier {
   CacheEntry _entry(PhotoItem it) =>
       _cache.entryFor(it.path, it.modified.millisecondsSinceEpoch, it.sizeBytes);
 
-  Future<void> openRoot(String path) async {
-    _root = path;
+  /// 중복·중첩 루트 제거: 같은 경로나 이미 추가된 폴더의 하위 폴더는 빼고,
+  /// 새로 추가하는 폴더가 기존 루트의 상위면 그 기존 루트들을 흡수한다.
+  List<String> _dedupRoots(List<String> paths) {
+    final out = <String>[];
+    for (final raw in paths) {
+      final path = p.normalize(raw);
+      if (out.any((e) => e == path || p.isWithin(e, path))) continue;
+      out.removeWhere((e) => p.isWithin(path, e));
+      out.add(path);
+    }
+    return out;
+  }
+
+  Future<({List<FolderGroup> folders, List<String> dirs})> _scanAll(
+      List<String> roots) async {
+    final folders = <FolderGroup>[];
+    final dirs = <String>[];
+    for (final r in roots) {
+      final res = await scanFolders(r);
+      folders.addAll(res.folders);
+      dirs.addAll(res.dirs);
+    }
+    return (folders: folders, dirs: dirs);
+  }
+
+  /// 라이브러리 루트 집합을 통째로 교체하고 다시 스캔한다. 분석 결과는 무효화.
+  Future<void> setRoots(List<String> paths) async {
+    _roots = _dedupRoots(paths);
     _loading = true;
     _error = null;
     _folders = [];
@@ -378,16 +408,20 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final res = await scanFolders(path);
+      final res = await _scanAll(_roots);
       _folders = res.folders;
       _allDirs = res.dirs;
       _allItems = _folders.expand((f) => f.items).toList();
       _hydrateFromCache(); // 이전 분석 결과 복원
-      _error = _folders.isEmpty ? '이 폴더에서 이미지를 찾지 못했습니다.' : null;
-      if (_folders.isNotEmpty) {
-        _settings = _settings.copyWith(lastRoot: path);
-        _settingsStore.save(_settings); // 마지막 폴더 기억
-      }
+      _error = _roots.isEmpty
+          ? null
+          : (_folders.isEmpty ? '추가된 폴더에서 이미지를 찾지 못했습니다.' : null);
+      // 추가한 폴더 목록 기억 (이미지가 없어도 위치는 유지)
+      _settings = _settings.copyWith(
+        roots: _roots,
+        lastRoot: _roots.isNotEmpty ? _roots.first : '',
+      );
+      _settingsStore.save(_settings);
     } catch (e) {
       _error = '폴더를 읽을 수 없습니다: $e';
       _folders = [];
@@ -398,9 +432,19 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// 폴더 1개로 라이브러리를 교체(기존 위치 대체). 툴바 "폴더 열기"·ZIP·부팅용.
+  Future<void> openRoot(String path) => setRoots([path]);
+
+  /// 맥 폴더를 라이브러리에 추가(기존 위치 유지). 사이드바 "+"용.
+  Future<void> addRoot(String path) => setRoots([..._roots, path]);
+
+  /// 추가된 위치를 목록에서 제거(디스크 파일은 삭제하지 않음).
+  Future<void> removeRoot(String path) =>
+      setRoots(_roots.where((r) => r != path).toList());
+
   Future<void> _rescanKeepingFolder() async {
     final keepPath = selectedFolder?.path;
-    final res = await scanFolders(_root!);
+    final res = await _scanAll(_roots);
     _folders = res.folders;
     _allDirs = res.dirs;
     _allItems = _folders.expand((f) => f.items).toList();
@@ -429,7 +473,7 @@ class AppState extends ChangeNotifier {
   /// 새 폴더를 만든다. parentPath 없으면 선택된 폴더(없으면 루트) 아래.
   /// 성공 시 null, 실패 시 오류 메시지.
   Future<String?> createFolder(String name, {String? parentPath}) async {
-    final parent = parentPath ?? (isFolderView ? selectedFolder?.path : null) ?? _root;
+    final parent = parentPath ?? (isFolderView ? selectedFolder?.path : null) ?? root;
     if (parent == null) return '열린 폴더가 없습니다';
     final dir = Directory(p.join(parent, name));
     if (await dir.exists()) return '이미 같은 이름의 폴더가 있습니다';
@@ -858,6 +902,8 @@ class AppState extends ChangeNotifier {
       ascending: _ascending,
       ratingFilter: _ratingFilter,
       meta: meta,
+      // 단일 폴더가 아니라 여러 폴더를 합쳐 보는 뷰에서는 폴더별로 묶어 보여준다.
+      groupByFolder: !isFolderView,
     );
     // 더 이상 보이지 않는 선택 항목 정리
     _selection.removeWhere((p) => !_visible.any((it) => it.path == p));

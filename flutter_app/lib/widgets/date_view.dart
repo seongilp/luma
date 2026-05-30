@@ -1,7 +1,5 @@
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
-import 'package:flutter/material.dart' show Colors;
-import 'package:flutter/widgets.dart';
-import 'package:macos_ui/macos_ui.dart';
+import 'package:flutter/material.dart';
 
 import '../state/app_state.dart';
 import 'analysis_overlay.dart';
@@ -72,7 +70,7 @@ class _Section extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8, left: 2),
             child: Row(
               children: [
-                const MacosIcon(CupertinoIcons.calendar, size: 15),
+                const Icon(CupertinoIcons.calendar, size: 15),
                 const SizedBox(width: 6),
                 Text(_title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 const SizedBox(width: 8),

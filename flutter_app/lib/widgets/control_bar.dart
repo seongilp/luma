@@ -1,8 +1,6 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
-import 'package:flutter/material.dart' show Colors;
-import 'package:flutter/widgets.dart';
-import 'package:macos_ui/macos_ui.dart';
+import 'package:flutter/material.dart';
 
 import '../models/sort_filter.dart';
 import '../services/file_ops.dart';
@@ -24,25 +22,19 @@ class ControlBar extends StatelessWidget {
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: MacosTheme.of(context).dividerColor),
-        ),
-      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (hasSel) ..._actions(context) else _viewLabel(),
           const Spacer(),
-          _filter(),
-          const SizedBox(width: 10),
-          _sort(),
-          const SizedBox(width: 4),
+          _filter(context),
+          const SizedBox(width: 8),
+          _sort(context),
           _orderButton(),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           _viewModeToggle(),
-          const SizedBox(width: 12),
-          _thumbSlider(),
+          const SizedBox(width: 10),
+          _thumbSlider(context),
         ],
       ),
     );
@@ -138,24 +130,22 @@ class ControlBar extends StatelessWidget {
   }
 
   // ── 별점/즐겨찾기 필터 ────────────────────────────────────
-  Widget _filter() {
-    return MacosPopupButton<RatingFilter>(
+  Widget _filter(BuildContext context) {
+    return _CompactDropdown<RatingFilter>(
       value: state.ratingFilter,
-      items: RatingFilter.values
-          .map((f) => MacosPopupMenuItem(value: f, child: Text(f.label)))
-          .toList(),
-      onChanged: (v) => v == null ? null : state.setRatingFilter(v),
+      values: RatingFilter.values,
+      labelOf: (f) => f.label,
+      onChanged: (v) => state.setRatingFilter(v),
     );
   }
 
   // ── 보기 옵션 ─────────────────────────────────────────────
-  Widget _sort() {
-    return MacosPopupButton<SortField>(
+  Widget _sort(BuildContext context) {
+    return _CompactDropdown<SortField>(
       value: state.sortField,
-      items: SortField.values
-          .map((f) => MacosPopupMenuItem(value: f, child: Text(f.label)))
-          .toList(),
-      onChanged: (v) => v == null ? null : state.setSort(v),
+      values: SortField.values,
+      labelOf: (f) => f.label,
+      onChanged: (v) => state.setSort(v),
     );
   }
 
@@ -163,13 +153,13 @@ class ControlBar extends StatelessWidget {
     final list = state.gridMode == GridMode.list;
     return Row(
       children: [
-        MacosIconButton(
-          icon: MacosIcon(CupertinoIcons.square_grid_2x2,
+        IconButton(
+          icon: Icon(CupertinoIcons.square_grid_2x2,
               size: 15, color: list ? Colors.grey : null),
           onPressed: () => state.setGridMode(GridMode.grid),
         ),
-        MacosIconButton(
-          icon: MacosIcon(CupertinoIcons.list_bullet,
+        IconButton(
+          icon: Icon(CupertinoIcons.list_bullet,
               size: 15, color: list ? null : Colors.grey),
           onPressed: () => state.setGridMode(GridMode.list),
         ),
@@ -178,8 +168,8 @@ class ControlBar extends StatelessWidget {
   }
 
   Widget _orderButton() {
-    return MacosIconButton(
-      icon: MacosIcon(
+    return IconButton(
+      icon: Icon(
         state.ascending ? CupertinoIcons.arrow_up : CupertinoIcons.arrow_down,
         size: 16,
       ),
@@ -187,20 +177,70 @@ class ControlBar extends StatelessWidget {
     );
   }
 
-  Widget _thumbSlider() {
+  Widget _thumbSlider(BuildContext context) {
     return Row(
       children: [
-        const MacosIcon(CupertinoIcons.photo, size: 14, color: Colors.grey),
+        const Icon(CupertinoIcons.photo, size: 14, color: Colors.grey),
+        const SizedBox(width: 2),
         SizedBox(
-          width: 100,
-          child: MacosSlider(
-            value: state.thumbSize,
-            min: 110,
-            max: 300,
-            onChanged: state.setThumbSize,
+          width: 96,
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+              showValueIndicator: ShowValueIndicator.never,
+            ),
+            child: Slider(
+              value: state.thumbSize,
+              min: 110,
+              max: 300,
+              onChanged: state.setThumbSize,
+            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 밑줄 없는 컴팩트 드롭다운 (컨트롤바용).
+class _CompactDropdown<T> extends StatelessWidget {
+  final T value;
+  final List<T> values;
+  final String Function(T) labelOf;
+  final void Function(T) onChanged;
+  const _CompactDropdown({
+    required this.value,
+    required this.values,
+    required this.labelOf,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isDense: true,
+          borderRadius: BorderRadius.circular(10),
+          icon: const Icon(CupertinoIcons.chevron_down, size: 11),
+          style: TextStyle(fontSize: 13, color: cs.onSurface),
+          padding: EdgeInsets.zero,
+          items: [
+            for (final v in values)
+              DropdownMenuItem(value: v, child: Text(labelOf(v))),
+          ],
+          onChanged: (v) => v == null ? null : onChanged(v),
+        ),
+      ),
     );
   }
 }
@@ -221,10 +261,10 @@ class _ActionBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MacosTooltip(
+    return Tooltip(
       message: tip,
-      child: MacosIconButton(
-        icon: MacosIcon(
+      child: IconButton(
+        icon: Icon(
           icon,
           size: 18,
           color: !enabled

@@ -1,10 +1,8 @@
 import 'dart:io';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
-import 'package:flutter/material.dart' show Colors;
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
-import 'package:macos_ui/macos_ui.dart';
 
 import '../state/app_state.dart';
 import 'analysis_overlay.dart';
@@ -41,7 +39,7 @@ class MapView extends StatelessWidget {
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: MacosTheme.of(context).dividerColor)),
+        border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
       ),
       child: Row(
         children: [
@@ -53,16 +51,13 @@ class MapView extends StatelessWidget {
             _legend(Colors.purpleAccent, 'Claude ${state.claudeLocationCount}'),
           ],
           const Spacer(),
-          PushButton(
-            controlSize: ControlSize.regular,
-            secondary: true,
+          TextButton(
             onPressed: state.estimateLocations,
             child: const Text('사진 내용으로 추정'),
           ),
           if (state.claudeConfigured) ...[
             const SizedBox(width: 8),
-            PushButton(
-              controlSize: ControlSize.regular,
+            FilledButton(
               onPressed:
                   state.unlocatedCount > 0 ? () => _runClaude(context) : null,
               child: Text('Claude로 위치 찾기 (${state.unlocatedCount})'),
@@ -101,7 +96,7 @@ class MapView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const MacosIcon(CupertinoIcons.map, size: 48, color: Colors.grey),
+          const Icon(CupertinoIcons.map, size: 48, color: Colors.grey),
           const SizedBox(height: 12),
           const Text('GPS 정보가 있는 사진이 없습니다',
               style: TextStyle(color: Colors.grey, fontSize: 15)),

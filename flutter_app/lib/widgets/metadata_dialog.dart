@@ -1,8 +1,6 @@
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
-import 'package:flutter/material.dart' show Colors;
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:macos_ui/macos_ui.dart';
 
 import '../services/exif_reader.dart';
 import '../services/geo.dart';
@@ -11,7 +9,7 @@ import '../services/xmp_service.dart';
 import '../state/app_state.dart';
 
 Future<void> showMetadataDialog(BuildContext context, AppState state, String path) {
-  return showMacosSheet(
+  return showDialog(
     context: context,
     builder: (_) => _MetadataDialog(state: state, path: path),
   );
@@ -109,7 +107,7 @@ class _MetadataDialogState extends State<_MetadataDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return MacosSheet(
+    return Dialog(
       child: Padding(
         padding: const EdgeInsets.all(22),
         child: Column(
@@ -118,7 +116,7 @@ class _MetadataDialogState extends State<_MetadataDialog> {
           children: [
             const Row(
               children: [
-                MacosIcon(CupertinoIcons.slider_horizontal_3, size: 20),
+                Icon(CupertinoIcons.slider_horizontal_3, size: 20),
                 SizedBox(width: 8),
                 Text('메타데이터 보정', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
               ],
@@ -136,16 +134,12 @@ class _MetadataDialogState extends State<_MetadataDialog> {
             const SizedBox(height: 8),
             Row(
               children: [
-                PushButton(
-                  controlSize: ControlSize.small,
-                  secondary: true,
+                TextButton(
                   onPressed: _exportXmp,
                   child: const Text('Lightroom XMP로 저장'),
                 ),
                 const SizedBox(width: 8),
-                PushButton(
-                  controlSize: ControlSize.small,
-                  secondary: true,
+                TextButton(
                   onPressed: _importXmp,
                   child: const Text('XMP에서 가져오기'),
                 ),
@@ -159,15 +153,12 @@ class _MetadataDialogState extends State<_MetadataDialog> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                PushButton(
-                  controlSize: ControlSize.large,
-                  secondary: true,
+                TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('취소'),
                 ),
                 const SizedBox(width: 10),
-                PushButton(
-                  controlSize: ControlSize.large,
+                FilledButton(
                   onPressed: _busy ? null : _save,
                   child: Text(_busy ? '저장 중…' : '저장'),
                 ),
@@ -187,7 +178,7 @@ class _MetadataDialogState extends State<_MetadataDialog> {
         children: [
           Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
           const SizedBox(height: 4),
-          SizedBox(width: 420, child: MacosTextField(controller: c, maxLines: 1)),
+          SizedBox(width: 420, child: TextField(controller: c, maxLines: 1)),
         ],
       ),
     );

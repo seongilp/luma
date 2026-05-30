@@ -12,8 +12,11 @@ class AppSettings {
   /// Claude 위치 추정 1회 실행에서 최대 호출(=장소 묶음) 수.
   int claudeMaxCalls;
 
-  /// 마지막으로 연 폴더 (다음 실행 시 자동 열기).
+  /// 마지막으로 연 폴더 (구버전 설정 마이그레이션용). 현재는 [roots] 사용.
   String lastRoot;
+
+  /// 사이드바에 추가된 맥 폴더(위치)들. 여러 폴더를 하나의 라이브러리로 합쳐 본다.
+  List<String> roots;
 
   /// 전체 UI 배율 (접근성 확대). 1.0 = 기본.
   double uiScale;
@@ -24,8 +27,9 @@ class AppSettings {
     this.cfToken = '',
     this.claudeMaxCalls = 50,
     this.lastRoot = '',
+    List<String>? roots,
     this.uiScale = 1.0,
-  });
+  }) : roots = roots ?? const [];
 
   AppSettings copyWith({
     String? anthropicApiKey,
@@ -33,6 +37,7 @@ class AppSettings {
     String? cfToken,
     int? claudeMaxCalls,
     String? lastRoot,
+    List<String>? roots,
     double? uiScale,
   }) =>
       AppSettings(
@@ -41,6 +46,7 @@ class AppSettings {
         cfToken: cfToken ?? this.cfToken,
         claudeMaxCalls: claudeMaxCalls ?? this.claudeMaxCalls,
         lastRoot: lastRoot ?? this.lastRoot,
+        roots: roots ?? this.roots,
         uiScale: uiScale ?? this.uiScale,
       );
 
@@ -50,6 +56,7 @@ class AppSettings {
         'cfToken': cfToken,
         'claudeMaxCalls': claudeMaxCalls,
         'lastRoot': lastRoot,
+        'roots': roots,
         'uiScale': uiScale,
       };
 
@@ -59,6 +66,7 @@ class AppSettings {
         cfToken: j['cfToken'] as String? ?? '',
         claudeMaxCalls: (j['claudeMaxCalls'] as num?)?.toInt() ?? 50,
         lastRoot: j['lastRoot'] as String? ?? '',
+        roots: (j['roots'] as List?)?.whereType<String>().toList() ?? const [],
         uiScale: (j['uiScale'] as num?)?.toDouble() ?? 1.0,
       );
 }

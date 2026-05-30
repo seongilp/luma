@@ -1,6 +1,4 @@
-import 'package:flutter/material.dart' show Colors;
-import 'package:flutter/widgets.dart';
-import 'package:macos_ui/macos_ui.dart';
+import 'package:flutter/material.dart';
 
 import '../models/folder_group.dart';
 import '../services/exif_reader.dart';
@@ -21,7 +19,7 @@ class InfoPanel extends StatelessWidget {
     return Container(
       width: 260,
       decoration: BoxDecoration(
-        border: Border(left: BorderSide(color: MacosTheme.of(context).dividerColor)),
+        border: Border(left: BorderSide(color: Theme.of(context).dividerColor)),
       ),
       child: p == null
           ? const Center(
@@ -36,7 +34,7 @@ class InfoPanel extends StatelessWidget {
               future: readInfo(p),
               builder: (context, snap) {
                 if (!snap.hasData) {
-                  return const Center(child: ProgressCircle());
+                  return const Center(child: CircularProgressIndicator());
                 }
                 final info = snap.data!;
                 return ListView(
@@ -60,9 +58,7 @@ class InfoPanel extends StatelessWidget {
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
-                      child: PushButton(
-                        controlSize: ControlSize.regular,
-                        secondary: true,
+                      child: TextButton(
                         onPressed: () => showMetadataDialog(context, state, p),
                         child: const Text('메타데이터 보정'),
                       ),

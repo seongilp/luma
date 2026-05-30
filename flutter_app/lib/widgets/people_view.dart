@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
-import 'package:flutter/material.dart' show Colors;
-import 'package:flutter/widgets.dart';
-import 'package:macos_ui/macos_ui.dart';
+import 'package:flutter/material.dart';
 
 import '../models/photo_item.dart';
 import '../state/app_state.dart';
@@ -48,16 +46,14 @@ class PeopleView extends StatelessWidget {
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: MacosTheme.of(context).dividerColor)),
+        border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
       ),
       child: Row(
         children: [
           Text('${state.personCount}명 (근사 분류)',
               style: const TextStyle(fontSize: 12, color: Colors.grey)),
           const Spacer(),
-          PushButton(
-            controlSize: ControlSize.regular,
-            secondary: true,
+          TextButton(
             onPressed: state.analyzeFaces,
             child: const Text('다시 분석'),
           ),

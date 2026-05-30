@@ -1,3 +1,5 @@
+import 'package:path/path.dart' as p;
+
 import '../services/natural_sort.dart';
 import 'photo_item.dart';
 import 'photo_meta.dart';
@@ -26,6 +28,9 @@ extension RatingFilterLabel on RatingFilter {
 }
 
 /// 검색어 + 필터를 적용한 뒤 정렬한 목록을 만든다. (순수 함수)
+///
+/// [groupByFolder]가 true면 같은 폴더 사진끼리 항상 붙여 보여준다(폴더가 1차 키).
+/// 여러 폴더를 합쳐 보는 '모든 사진'에서 사진이 마구 섞이는 걸 막는다.
 List<PhotoItem> applySortFilter(
   List<PhotoItem> items, {
   required String query,
@@ -33,6 +38,7 @@ List<PhotoItem> applySortFilter(
   required bool ascending,
   required RatingFilter ratingFilter,
   required MetaStore meta,
+  bool groupByFolder = false,
 }) {
   final q = query.trim().toLowerCase();
   var list = items.where((it) {
@@ -53,6 +59,14 @@ List<PhotoItem> applySortFilter(
         SortField.size => a.sizeBytes.compareTo(b.sizeBytes),
       };
 
-  list.sort((a, b) => ascending ? cmp(a, b) : cmp(b, a));
+  list.sort((a, b) {
+    // 폴더 그룹은 항상 같은 순서로 묶고, 그 안에서만 선택한 기준으로 정렬한다.
+    if (groupByFolder) {
+      final byDir = naturalCompare(p.dirname(a.path), p.dirname(b.path));
+      if (byDir != 0) return byDir;
+    }
+    final c = cmp(a, b);
+    return ascending ? c : -c;
+  });
   return list;
 }

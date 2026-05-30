@@ -65,6 +65,8 @@ List<FolderNode> buildFolderTree(String root, List<FolderGroup> folders, List<St
   }
   for (var i = 0; i < folders.length; i++) {
     final fg = folders[i];
+    // 멀티루트: 이 루트에 속한 폴더만 (다른 루트의 폴더는 건너뜀)
+    if (fg.path != root && !p.isWithin(root, fg.path)) continue;
     final m = nodeFor(fg.path);
     m.folderIndex = i;
     m.direct = fg.count;

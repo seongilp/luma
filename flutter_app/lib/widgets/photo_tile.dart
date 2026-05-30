@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:macos_ui/macos_ui.dart';
 
 import '../models/photo_item.dart';
 import '../state/app_state.dart';
@@ -46,7 +45,7 @@ class _PhotoTileState extends State<PhotoTile> {
     final path = widget.item.path;
     final selected = state.isSelected(path);
     final meta = state.meta.get(path);
-    final accent = MacosTheme.of(context).primaryColor;
+    final accent = Theme.of(context).colorScheme.primary;
     final showOverlay = _hover || selected || meta.favorite || meta.rating > 0;
 
     return MouseRegion(

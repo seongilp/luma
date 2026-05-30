@@ -1,7 +1,5 @@
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
-import 'package:flutter/material.dart' show Colors;
-import 'package:flutter/widgets.dart';
-import 'package:macos_ui/macos_ui.dart';
+import 'package:flutter/material.dart';
 
 import '../models/photo_item.dart';
 import '../state/app_state.dart';
@@ -32,16 +30,16 @@ class SimilarView extends StatelessWidget {
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: MacosTheme.of(context).dividerColor)),
+        border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
       ),
       child: Row(
         children: [
           const Text('분석 방식', style: TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(width: 8),
-          MacosPopupButton<SimilarMode>(
+          DropdownButton<SimilarMode>(
             value: state.similarMode,
             items: SimilarMode.values
-                .map((m) => MacosPopupMenuItem(value: m, child: Text(m.label)))
+                .map((m) => DropdownMenuItem(value: m, child: Text(m.label)))
                 .toList(),
             onChanged: state.analyzing
                 ? null
@@ -53,9 +51,7 @@ class SimilarView extends StatelessWidget {
                 style: TextStyle(fontSize: 11, color: Colors.orange)),
           ],
           const Spacer(),
-          PushButton(
-            controlSize: ControlSize.regular,
-            secondary: true,
+          TextButton(
             onPressed: state.analyzing ? null : state.analyzeSimilar,
             child: const Text('다시 분석'),
           ),
@@ -75,7 +71,7 @@ class SimilarView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const MacosIcon(CupertinoIcons.square_stack_3d_down_right,
+            const Icon(CupertinoIcons.square_stack_3d_down_right,
                 size: 48, color: Colors.grey),
             const SizedBox(height: 12),
             const Text('비슷한 사진을 찾지 못했습니다',
@@ -131,14 +127,12 @@ class _Group extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8, left: 2),
             child: Row(
               children: [
-                const MacosIcon(CupertinoIcons.square_stack_3d_down_right, size: 16),
+                const Icon(CupertinoIcons.square_stack_3d_down_right, size: 16),
                 const SizedBox(width: 6),
                 Text('유사 사진 ${items.length}장',
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 const SizedBox(width: 10),
-                PushButton(
-                  controlSize: ControlSize.small,
-                  secondary: true,
+                TextButton(
                   onPressed: () => _cleanup(context),
                   child: const Text('1장만 남기고 정리'),
                 ),

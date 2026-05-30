@@ -1,7 +1,6 @@
-import 'package:flutter/widgets.dart';
-import 'package:macos_ui/macos_ui.dart';
+import 'package:flutter/material.dart';
 
-/// MacosScrollbar와 내부 스크롤뷰가 같은 ScrollController를 공유하도록 묶는다.
+/// Scrollbar와 내부 스크롤뷰가 같은 ScrollController를 공유하도록 묶는다.
 /// (컨트롤러 미연결로 인한 "no ScrollPosition attached" 예외 방지)
 class ScrollArea extends StatefulWidget {
   final Widget Function(ScrollController controller) builder;
@@ -22,7 +21,7 @@ class _ScrollAreaState extends State<ScrollArea> {
 
   @override
   Widget build(BuildContext context) {
-    return MacosScrollbar(
+    return Scrollbar(
       controller: _controller,
       child: widget.builder(_controller),
     );

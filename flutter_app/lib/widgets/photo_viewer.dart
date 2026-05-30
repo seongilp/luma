@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:macos_ui/macos_ui.dart' show MacosSheet, PushButton, ControlSize, showMacosSheet;
 import 'package:video_player/video_player.dart';
 
 import '../models/folder_group.dart';
@@ -88,9 +87,9 @@ class _PhotoViewerState extends State<PhotoViewer> {
   }
 
   Future<void> _showTextSheet(String title, String text, {bool copyable = true}) async {
-    await showMacosSheet(
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => MacosSheet(
+      builder: (ctx) => Dialog(
         child: Padding(
           padding: const EdgeInsets.all(22),
           child: Column(
@@ -110,9 +109,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   if (copyable)
-                    PushButton(
-                      controlSize: ControlSize.large,
-                      secondary: true,
+                    TextButton(
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: text));
                         Navigator.of(ctx).pop();
@@ -120,8 +117,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
                       child: const Text('복사'),
                     ),
                   const SizedBox(width: 10),
-                  PushButton(
-                    controlSize: ControlSize.large,
+                  FilledButton(
                     onPressed: () => Navigator.of(ctx).pop(),
                     child: const Text('닫기'),
                   ),
@@ -141,9 +137,9 @@ class _PhotoViewerState extends State<PhotoViewer> {
     if (!mounted) return;
     setState(() => _ocrBusy = false);
     final text = lines.join('\n');
-    await showMacosSheet(
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => MacosSheet(
+      builder: (ctx) => Dialog(
         child: Padding(
           padding: const EdgeInsets.all(22),
           child: Column(
@@ -166,15 +162,12 @@ class _PhotoViewerState extends State<PhotoViewer> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  PushButton(
-                    controlSize: ControlSize.large,
-                    secondary: true,
+                  TextButton(
                     onPressed: () => Navigator.of(ctx).pop(),
                     child: const Text('닫기'),
                   ),
                   const SizedBox(width: 10),
-                  PushButton(
-                    controlSize: ControlSize.large,
+                  FilledButton(
                     onPressed: text.isEmpty
                         ? null
                         : () {

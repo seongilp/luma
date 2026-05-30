@@ -7,9 +7,20 @@ import Vision
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
-    let windowFrame = self.frame
     self.contentViewController = flutterViewController
-    self.setFrame(windowFrame, display: true)
+
+    // 첫 실행 창 크기: 화면의 약 1/4(넓이의 절반 × 높이의 절반)을 기준으로,
+    // 너무 작지 않게 최소 크기를 보장하고 화면 가운데에 배치한다.
+    if let vf = NSScreen.main?.visibleFrame {
+      let w = max(1040, vf.width * 0.5)
+      let h = max(720, vf.height * 0.62)
+      let x = vf.minX + (vf.width - w) / 2
+      let y = vf.minY + (vf.height - h) / 2
+      self.setFrame(NSRect(x: x, y: y, width: w, height: h), display: true)
+    } else {
+      self.setFrame(self.frame, display: true)
+    }
+    self.minSize = NSSize(width: 900, height: 600)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
 

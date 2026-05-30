@@ -1,10 +1,9 @@
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Colors;
-import 'package:macos_ui/macos_ui.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/material.dart';
 
 import '../models/folder_node.dart';
 import '../state/app_state.dart';
-import 'dialogs.dart';
 
 /// 좌측 사이드바: 상단 `보관함`(스마트 보기) + 하단 `폴더` 디렉토리 트리.
 class FolderSidebar extends StatefulWidget {
@@ -29,20 +28,35 @@ class _FolderSidebarState extends State<FolderSidebar> {
   Widget build(BuildContext context) {
     final state = widget.state;
     if (state.root == null) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Text('폴더를 열어 시작하세요',
-            style: TextStyle(color: Colors.grey, fontSize: 13)),
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('폴더를 추가해 시작하세요',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 13)),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: _addLocation,
+              icon: const Icon(CupertinoIcons.add, size: 18),
+              label: const Text('폴더 추가'),
+            ),
+          ],
+        ),
       );
     }
 
     final tree = state.folderTree;
-    // 루트가 바뀌면 루트 노드를 기본 펼침
-    if (tree.isNotEmpty && _treeRoot != tree.first.path) {
-      _treeRoot = tree.first.path;
-      _expanded
-        ..clear()
-        ..add(tree.first.path);
+    // 루트 구성이 바뀌면 트리를 접은 상태로 초기화(깊은 하위폴더로 어수선해지지 않게).
+    // 추가된 위치가 하나뿐일 때만 그 한 단계는 펼쳐 바로 내용이 보이게 한다.
+    final topKey = tree.map((n) => n.path).join('|');
+    if (_treeRoot != topKey) {
+      _treeRoot = topKey;
+      _expanded.clear();
+      if (tree.length == 1) _expanded.add(tree.first.path);
     }
 
     return ListView(
@@ -108,24 +122,17 @@ class _FolderSidebarState extends State<FolderSidebar> {
           onTap: state.showStats,
         ),
         const SizedBox(height: 6),
-        _SectionHeader('폴더', trailing: _AddFolderButton(onTap: _createFolder)),
+        _SectionHeader('폴더', trailing: _AddFolderButton(onTap: _addLocation)),
         for (final node in tree) ..._treeRows(node, 0),
       ],
     );
   }
 
-  Future<void> _createFolder() async {
-    final name = await promptText(
-      context,
-      title: '새 폴더',
-      initial: '새 폴더',
-      confirmLabel: '만들기',
-    );
-    if (name == null) return;
-    final err = await widget.state.createFolder(name);
-    if (err != null && mounted) {
-      await confirm(context, title: '폴더 생성', message: err, confirmLabel: '확인');
-    }
+  /// 맥의 기존 폴더를 골라 라이브러리에 위치로 추가한다.
+  Future<void> _addLocation() async {
+    final dir = await getDirectoryPath(confirmButtonText: '추가');
+    if (dir == null) return;
+    await widget.state.addRoot(dir);
   }
 
   List<Widget> _treeRows(FolderNode node, int depth) {
@@ -141,7 +148,9 @@ class _FolderSidebarState extends State<FolderSidebar> {
         depth: depth,
         expanded: expanded,
         selected: selected,
-        accent: MacosTheme.of(context).primaryColor,
+        accent: Theme.of(context).colorScheme.primary,
+        // 최상위 노드(=추가된 맥 폴더)는 목록에서 제거 가능.
+        onRemove: depth == 0 ? () => state.removeRoot(node.path) : null,
         onToggle: node.hasChildren
             ? () => setState(() {
                   if (expanded) {
@@ -179,6 +188,7 @@ class _TreeRow extends StatelessWidget {
   final Color accent;
   final VoidCallback? onToggle;
   final VoidCallback onTap;
+  final VoidCallback? onRemove;
 
   const _TreeRow({
     required this.node,
@@ -188,19 +198,23 @@ class _TreeRow extends StatelessWidget {
     required this.accent,
     required this.onToggle,
     required this.onTap,
+    this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
+    final labelColor = Theme.of(context).colorScheme.onSurface;
+    final secondary = Theme.of(context).colorScheme.onSurfaceVariant;
+    final tertiary = Theme.of(context).colorScheme.outline;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 1),
-        padding: EdgeInsets.only(left: 4.0 + depth * 14, right: 8, top: 5, bottom: 5),
+        margin: const EdgeInsets.symmetric(vertical: 1.5),
+        padding: EdgeInsets.only(left: 4.0 + depth * 14, right: 8, top: 6, bottom: 6),
         decoration: BoxDecoration(
-          color: selected ? accent : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
+          color: selected ? accent.withValues(alpha: 0.16) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
@@ -214,35 +228,52 @@ class _TreeRow extends StatelessWidget {
                     ? Icon(
                         expanded ? CupertinoIcons.chevron_down : CupertinoIcons.chevron_right,
                         size: 10,
-                        color: selected ? Colors.white70 : Colors.grey,
+                        color: tertiary,
                       )
                     : const SizedBox(),
               ),
             ),
-            MacosIcon(
+            Icon(
               node.hasChildren && expanded
                   ? CupertinoIcons.folder_open
                   : CupertinoIcons.folder_fill,
               size: 15,
-              color: selected ? Colors.white : accent,
+              color: accent,
             ),
-            const SizedBox(width: 7),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 node.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13, color: selected ? Colors.white : null),
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: selected ? accent : labelColor,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
               ),
             ),
             const SizedBox(width: 6),
             Text(
               '${node.totalCount}',
               style: TextStyle(
-                fontSize: 12,
-                color: selected ? Colors.white70 : Colors.grey,
-              ),
+                  fontSize: 12.5, color: selected ? accent : secondary),
             ),
+            if (onRemove != null) ...[
+              const SizedBox(width: 4),
+              Tooltip(
+                message: '목록에서 제거',
+                child: GestureDetector(
+                  onTap: onRemove,
+                  behavior: HitTestBehavior.opaque,
+                  child: Icon(
+                    CupertinoIcons.xmark_circle_fill,
+                    size: 13,
+                    color: tertiary,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -258,16 +289,16 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 4, 4),
+      padding: const EdgeInsets.fromLTRB(10, 10, 4, 5),
       child: Row(
         children: [
           Text(
             title,
-            style: const TextStyle(
-              fontSize: 11,
+            style: TextStyle(
+              fontSize: 11.5,
               fontWeight: FontWeight.w600,
-              color: Colors.grey,
-              letterSpacing: 0.3,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              letterSpacing: 0.2,
             ),
           ),
           const Spacer(),
@@ -284,14 +315,15 @@ class _AddFolderButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MacosTooltip(
-      message: '새 폴더',
+    return Tooltip(
+      message: '폴더 추가',
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: const Padding(
-          padding: EdgeInsets.all(2),
-          child: Icon(CupertinoIcons.add, size: 14, color: Colors.grey),
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: Icon(CupertinoIcons.add,
+              size: 15, color: Theme.of(context).colorScheme.primary),
         ),
       ),
     );
@@ -319,34 +351,41 @@ class _SidebarRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = MacosTheme.of(context).primaryColor;
+    final accent = Theme.of(context).colorScheme.primary;
+    final labelColor = Theme.of(context).colorScheme.onSurface;
+    final secondary = Theme.of(context).colorScheme.onSurfaceVariant;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 1),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        margin: const EdgeInsets.symmetric(vertical: 1.5),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? accent : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
+          color: selected ? accent.withValues(alpha: 0.16) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
-            MacosIcon(icon, size: 16, color: selected ? Colors.white : (iconColor ?? accent)),
-            const SizedBox(width: 8),
+            Icon(icon, size: 17, color: selected ? accent : (iconColor ?? accent)),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13, color: selected ? Colors.white : null),
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: selected ? accent : labelColor,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
               ),
             ),
             const SizedBox(width: 6),
             if (showCount)
               Text(
                 '$count',
-                style: TextStyle(fontSize: 12, color: selected ? Colors.white70 : Colors.grey),
+                style: TextStyle(
+                    fontSize: 12.5, color: selected ? accent : secondary),
               ),
           ],
         ),
