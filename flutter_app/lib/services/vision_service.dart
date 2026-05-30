@@ -1,31 +1,15 @@
 import 'package:flutter/services.dart';
 
-import '../models/photo_item.dart';
-
-/// macOS Vision(네이티브) 유사 사진 분석 브리지.
+/// macOS Vision(네이티브) 브리지. 이미지 1장의 특징벡터를 받아온다.
 class VisionService {
   static const _channel = MethodChannel('photo_manager/vision');
 
-  /// Vision 특징벡터로 의미적 유사 묶음을 계산한다.
-  /// 미지원/실패 시 null을 반환(호출측에서 해시로 폴백).
-  static Future<List<List<PhotoItem>>?> similarGroups(
-    List<PhotoItem> items, {
-    double threshold = 0.6,
-  }) async {
-    if (items.isEmpty) return [];
+  /// 사진의 Vision 특징벡터. 미지원/실패 시 null.
+  static Future<List<double>?> featurePrint(String path) async {
     try {
-      final paths = items.map((e) => e.path).toList();
-      final res = await _channel.invokeMethod('similarGroups', {
-        'paths': paths,
-        'threshold': threshold,
-      });
+      final res = await _channel.invokeMethod('featurePrint', {'path': path});
       if (res is! List) return null;
-      final groups = <List<PhotoItem>>[];
-      for (final g in res) {
-        final idxs = (g as List).map((e) => (e as num).toInt());
-        groups.add([for (final i in idxs) items[i]]);
-      }
-      return groups;
+      return [for (final e in res) (e as num).toDouble()];
     } catch (_) {
       return null;
     }

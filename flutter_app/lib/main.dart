@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -67,12 +68,18 @@ class _HomePageState extends State<HomePage> {
             await _state.setRating(items[1].path, 4);
           }
         }
+        if (Platform.environment['PHOTO_OVERLAY'] != null) {
+          unawaited(_state.showSimilar()); // 분석 도중 화면을 잡기 위해 await 안 함
+          await Future.delayed(const Duration(milliseconds: 1500));
+          final shot = Platform.environment['PHOTO_SHOT'];
+          if (shot != null && shot.isNotEmpty) await _captureAndExit(shot);
+        }
         if (Platform.environment['PHOTO_SIMILAR'] != null) {
           await _state.showSimilar();
         }
         if (Platform.environment['PHOTO_MAP'] != null) {
           await _state.showMap();
-          await _state.propagateLocations();
+          await _state.estimateLocations();
           await Future.delayed(const Duration(seconds: 4)); // 지도 타일 로드 대기
         }
         final shot = Platform.environment['PHOTO_SHOT'];

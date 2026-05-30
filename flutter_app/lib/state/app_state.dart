@@ -8,7 +8,14 @@ import '../models/sort_filter.dart';
 import '../services/file_ops.dart';
 import '../services/geo.dart';
 import '../services/similarity.dart';
+import '../services/vector_ops.dart';
 import '../services/vision_service.dart';
+
+/// 유사도로 같은 묶음으로 볼 Vision 벡터 거리 임계값.
+const double _kSimilarThreshold = 0.6;
+
+/// 내용 기반 위치추정: 이 거리 안에 GPS 사진이 있으면 같은 장소로 본다.
+const double _kLocationThreshold = 0.9;
 
 /// 지도에 표시할 위치가 있는 사진 한 장.
 typedef LocatedPhoto = ({String path, LatLng pos, bool estimated});
@@ -50,9 +57,17 @@ class AppState extends ChangeNotifier {
   // 유사 사진 분석
   List<List<PhotoItem>> _similarGroups = [];
   bool _analyzing = false;
-  double _analyzeProgress = 0;
   SimilarMode _similarMode = SimilarMode.ai;
   bool _usedFallback = false;
+
+  // Vision 특징벡터 캐시 (유사도 + 내용기반 위치추정 공용)
+  final Map<String, List<double>> _vectors = {};
+
+  // 진행 상태(분석 화면용): 무엇을·몇 번째·어떤 파일
+  String _progressPhase = '';
+  int _progressIndex = 0;
+  int _progressTotal = 0;
+  String? _progressPath;
 
   // 위치/지도
   final Map<String, LatLng> _geo = {}; // EXIF GPS (실제)
@@ -93,9 +108,16 @@ class AppState extends ChangeNotifier {
   int get similarPhotoCount =>
       _similarGroups.fold(0, (s, g) => s + g.length);
   bool get analyzing => _analyzing;
-  double get analyzeProgress => _analyzeProgress;
   SimilarMode get similarMode => _similarMode;
   bool get usedFallback => _usedFallback;
+
+  // 진행 상태 getter (분석 오버레이용)
+  String get progressPhase => _progressPhase;
+  int get progressIndex => _progressIndex;
+  int get progressTotal => _progressTotal;
+  String? get progressPath => _progressPath;
+  double get progressFraction =>
+      _progressTotal == 0 ? 0 : _progressIndex / _progressTotal;
 
   bool get geoLoading => _geoLoading;
   double get geoProgress => _geoProgress;
@@ -150,6 +172,7 @@ class AppState extends ChangeNotifier {
     _folders = [];
     _allItems = [];
     _similarGroups = [];
+    _vectors.clear();
     _geo.clear();
     _estimatedGeo.clear();
     _view = LibraryView.all;
@@ -176,6 +199,7 @@ class AppState extends ChangeNotifier {
     _folders = await scanFolders(_root!);
     _allItems = _folders.expand((f) => f.items).toList();
     _similarGroups = []; // 파일이 바뀌었으니 무효화
+    _vectors.clear();
     _geo.clear();
     _estimatedGeo.clear();
     if (keepPath != null) {
@@ -234,38 +258,70 @@ class AppState extends ChangeNotifier {
     _geo.clear();
     notifyListeners();
     for (var i = 0; i < _allItems.length; i++) {
+      _setProgress('위치(GPS) 읽는 중', i + 1, _allItems.length, _allItems[i].path);
       final pos = await readGps(_allItems[i].path);
       if (pos != null) _geo[_allItems[i].path] = pos;
-      if (i % 8 == 0 || i == _allItems.length - 1) {
-        _geoProgress = (i + 1) / _allItems.length;
-        notifyListeners();
-      }
+      _geoProgress = (i + 1) / _allItems.length;
     }
     _geoLoading = false;
+    _clearProgress();
     notifyListeners();
   }
 
-  /// ④ 유사 사진 묶음을 이용해, GPS 없는 사진에 같은 묶음의 GPS를 전파(추정).
-  Future<void> propagateLocations() async {
-    if (_similarGroups.isEmpty) {
-      await analyzeSimilar();
-    }
+  /// ④ 사진 내용(Vision 특징벡터)으로 위치 추정.
+  /// GPS 없는 사진을, 라이브러리의 GPS 사진들과 시각적으로 비교해
+  /// 가장 비슷한(같은 장소로 판단되는) 사진의 위치를 부여한다.
+  /// Vision 불가 시 유사 묶음 기반 전파로 폴백.
+  Future<void> estimateLocations() async {
+    if (_allItems.isEmpty || _analyzing) return;
+    _analyzing = true;
+    notifyListeners();
+
+    final ok = await _ensureVectors('위치 분석 (사진 내용)');
     _estimatedGeo.clear();
-    for (final group in _similarGroups) {
-      // 묶음 안에서 실제 GPS가 있는 대표 위치를 찾는다.
-      LatLng? anchor;
-      for (final it in group) {
-        final g = _geo[it.path];
-        if (g != null) {
-          anchor = g;
-          break;
+
+    if (ok) {
+      final refs = [
+        for (final it in _allItems)
+          if (_geo.containsKey(it.path) && _vectors.containsKey(it.path)) it.path
+      ];
+      for (final it in _allItems) {
+        if (_geo.containsKey(it.path)) continue;
+        final v = _vectors[it.path];
+        if (v == null) continue;
+        var best = double.infinity;
+        String? bestRef;
+        for (final r in refs) {
+          final d = l2Distance(v, _vectors[r]!);
+          if (d < best) {
+            best = d;
+            bestRef = r;
+          }
+        }
+        if (bestRef != null && best <= _kLocationThreshold) {
+          _estimatedGeo[it.path] = _geo[bestRef]!;
         }
       }
-      if (anchor == null) continue;
-      for (final it in group) {
-        if (!_geo.containsKey(it.path)) _estimatedGeo[it.path] = anchor;
+    } else {
+      // Vision 불가 → 기존 유사 묶음으로 위치 전파
+      for (final group in _similarGroups) {
+        LatLng? anchor;
+        for (final it in group) {
+          final g = _geo[it.path];
+          if (g != null) {
+            anchor = g;
+            break;
+          }
+        }
+        if (anchor == null) continue;
+        for (final it in group) {
+          if (!_geo.containsKey(it.path)) _estimatedGeo[it.path] = anchor;
+        }
       }
     }
+
+    _analyzing = false;
+    _clearProgress();
     notifyListeners();
   }
 
@@ -280,30 +336,64 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  void _setProgress(String phase, int index, int total, String? path) {
+    _progressPhase = phase;
+    _progressIndex = index;
+    _progressTotal = total;
+    _progressPath = path;
+    notifyListeners();
+  }
+
+  void _clearProgress() {
+    _progressPhase = '';
+    _progressPath = null;
+    _progressIndex = 0;
+    _progressTotal = 0;
+  }
+
+  /// 모든 사진의 Vision 특징벡터를 확보해 캐시한다. Vision 자체가 안 되면 false.
+  Future<bool> _ensureVectors(String phase) async {
+    final todo = [for (final it in _allItems) if (!_vectors.containsKey(it.path)) it];
+    if (todo.isEmpty) return _vectors.isNotEmpty;
+    for (var i = 0; i < todo.length; i++) {
+      _setProgress(phase, i + 1, todo.length, todo[i].path);
+      final v = await VisionService.featurePrint(todo[i].path);
+      if (v == null) {
+        if (i == 0 && _vectors.isEmpty) return false; // Vision 미지원
+        continue;
+      }
+      _vectors[todo[i].path] = v;
+    }
+    return true;
+  }
+
   /// 전체 사진을 분석해 유사 묶음을 만든다.
-  /// AI(Vision) 모드는 네이티브 호출, 실패 시 해시로 폴백. 해시 모드는 진행률 알림.
+  /// AI 모드는 Vision 특징벡터로 클러스터링, 실패 시 해시로 폴백.
   Future<void> analyzeSimilar() async {
     if (_analyzing || _allItems.isEmpty) return;
     _analyzing = true;
-    _analyzeProgress = 0;
     _usedFallback = false;
     notifyListeners();
 
     List<List<PhotoItem>>? groups;
     if (_similarMode == SimilarMode.ai) {
-      groups = await VisionService.similarGroups(_allItems);
-      if (groups == null) _usedFallback = true; // Vision 실패 → 해시
+      final ok = await _ensureVectors('유사도 분석 (AI)');
+      if (ok) {
+        final vecs = [for (final it in _allItems) _vectors[it.path]];
+        final idxGroups = clusterByDistance(vecs, _kSimilarThreshold);
+        groups = [for (final g in idxGroups) [for (final i in g) _allItems[i]]];
+      } else {
+        _usedFallback = true;
+      }
     }
     groups ??= await findSimilarGroups(
       _allItems,
-      onProgress: (p) {
-        _analyzeProgress = p;
-        notifyListeners();
-      },
+      onProgress: (i, total, path) => _setProgress('유사도 분석 (해시)', i, total, path),
     );
 
     _similarGroups = groups;
     _analyzing = false;
+    _clearProgress();
     _recompute();
   }
 

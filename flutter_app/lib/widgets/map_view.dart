@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 import '../state/app_state.dart';
+import 'analysis_overlay.dart';
 import 'photo_viewer.dart';
 
 /// 지도 보기: EXIF GPS가 있는 사진은 실제 위치에, 유사 사진으로 추정한 위치는
@@ -16,17 +17,8 @@ class MapView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (state.geoLoading) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('사진 위치(GPS)를 읽는 중…', style: TextStyle(fontSize: 15)),
-            const SizedBox(height: 14),
-            SizedBox(width: 240, child: ProgressBar(value: state.geoProgress * 100)),
-          ],
-        ),
-      );
+    if (state.geoLoading || state.analyzing) {
+      return AnalysisOverlay(state: state);
     }
 
     final located = state.locatedPhotos;
@@ -57,9 +49,8 @@ class MapView extends StatelessWidget {
           const Spacer(),
           PushButton(
             controlSize: ControlSize.regular,
-            secondary: true,
-            onPressed: state.propagateLocations,
-            child: const Text('유사 사진으로 위치 추정'),
+            onPressed: state.estimateLocations,
+            child: const Text('사진 내용으로 위치 추정'),
           ),
         ],
       ),
@@ -86,7 +77,7 @@ class MapView extends StatelessWidget {
           const Text('GPS 정보가 있는 사진이 없습니다',
               style: TextStyle(color: Colors.grey, fontSize: 15)),
           const SizedBox(height: 6),
-          const Text('“유사 사진으로 위치 추정”으로 일부를 채울 수 있어요',
+          const Text('“사진 내용으로 위치 추정”으로 일부를 채울 수 있어요',
               style: TextStyle(color: Colors.grey, fontSize: 12)),
         ],
       ),

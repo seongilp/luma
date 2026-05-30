@@ -5,6 +5,7 @@ import 'package:macos_ui/macos_ui.dart';
 
 import '../models/photo_item.dart';
 import '../state/app_state.dart';
+import 'analysis_overlay.dart';
 import 'photo_tile.dart';
 import 'photo_viewer.dart';
 
@@ -63,25 +64,7 @@ class SimilarView extends StatelessWidget {
 
   Widget _content() {
     if (state.analyzing) {
-      final ai = state.similarMode == SimilarMode.ai;
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(ai ? 'AI가 사진을 분석하는 중…' : '유사한 사진을 분석하는 중…',
-                style: const TextStyle(fontSize: 15)),
-            const SizedBox(height: 14),
-            if (ai)
-              const ProgressCircle()
-            else ...[
-              SizedBox(width: 240, child: ProgressBar(value: state.analyzeProgress * 100)),
-              const SizedBox(height: 8),
-              Text('${(state.analyzeProgress * 100).round()}%',
-                  style: const TextStyle(color: Colors.grey, fontSize: 12)),
-            ],
-          ],
-        ),
-      );
+      return AnalysisOverlay(state: state);
     }
 
     final groups = state.similarGroups;

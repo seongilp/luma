@@ -10,19 +10,17 @@ const int kSimilarThreshold = 10;
 Future<List<List<PhotoItem>>> findSimilarGroups(
   List<PhotoItem> items, {
   int threshold = kSimilarThreshold,
-  void Function(double progress)? onProgress,
+  void Function(int index, int total, String path)? onProgress,
 }) async {
   final kept = <PhotoItem>[];
   final hashes = <int>[];
 
   for (var i = 0; i < items.length; i++) {
+    onProgress?.call(i + 1, items.length, items[i].path);
     final h = await computeDHash(items[i].path);
     if (h != null) {
       kept.add(items[i]);
       hashes.add(h);
-    }
-    if (onProgress != null && (i % 4 == 0 || i == items.length - 1)) {
-      onProgress((i + 1) / items.length);
     }
   }
 
