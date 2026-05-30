@@ -230,8 +230,16 @@ class _HomePageState extends State<HomePage> {
   /// 접근성 확대: ⌘+ (확대) / ⌘− (축소) / ⌘0 (원래대로). 앱 전역.
   KeyEventResult _onZoomKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    if (!HardwareKeyboard.instance.isMetaPressed) return KeyEventResult.ignored;
     final k = event.logicalKey;
+    // Delete/Backspace로 선택 삭제(휴지통). 본문 포커스가 빠졌을 때를 위한 폴백
+    // (본문에서 이미 처리했다면 여기까지 이벤트가 오지 않아 중복되지 않음).
+    if ((k == LogicalKeyboardKey.delete || k == LogicalKeyboardKey.backspace) &&
+        _state.root != null &&
+        _state.selectedCount > 0) {
+      _confirmDelete();
+      return KeyEventResult.handled;
+    }
+    if (!HardwareKeyboard.instance.isMetaPressed) return KeyEventResult.ignored;
     // ⌘, : 설정 (맥 기본), ⌘K : 커맨드 팔레트
     if (k == LogicalKeyboardKey.comma) {
       showSettings(context, _state);
