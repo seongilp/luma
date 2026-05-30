@@ -155,10 +155,19 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _openZip() async {
     const group = XTypeGroup(label: 'ZIP', extensions: ['zip']);
+    final messenger = ScaffoldMessenger.of(context);
     final file = await openFile(acceptedTypeGroups: [group]);
     if (file == null) return;
     final dir = await extractZipToTemp(file.path);
-    if (dir != null) await _state.openRoot(dir);
+    if (dir != null) {
+      await _state.openRoot(dir);
+    } else {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+            content: Text('ZIP을 열 수 없습니다 (손상되었거나 지원되지 않는 형식)'),
+            behavior: SnackBarBehavior.floating));
+    }
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {

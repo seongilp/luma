@@ -62,6 +62,9 @@ class _MetadataDialogState extends State<_MetadataDialog> {
 
   Future<void> _save() async {
     setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    var ok = true;
     // EXIF 날짜/GPS
     String? dt;
     if (_date.text.trim().isNotEmpty) {
@@ -72,7 +75,8 @@ class _MetadataDialogState extends State<_MetadataDialog> {
     final lat = double.tryParse(_lat.text.trim());
     final lng = double.tryParse(_lng.text.trim());
     if (dt != null || (lat != null && lng != null)) {
-      await widget.state.correctMetadata(widget.path, dateTime: dt, lat: lat, lng: lng);
+      ok = await widget.state
+          .correctMetadata(widget.path, dateTime: dt, lat: lat, lng: lng);
     }
     // Finder 태그
     final tagList = _tags.text
@@ -80,10 +84,17 @@ class _MetadataDialogState extends State<_MetadataDialog> {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
-    await MetadataService.setTags(widget.path, tagList);
-    if (mounted) {
-      setState(() => _busy = false);
-      Navigator.of(context).pop();
+    final tagOk = await MetadataService.setTags(widget.path, tagList);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (ok && tagOk) {
+      navigator.pop();
+    } else {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+            content: Text('메타데이터를 저장하지 못했습니다 (권한·형식 확인)'),
+            behavior: SnackBarBehavior.floating));
     }
   }
 
