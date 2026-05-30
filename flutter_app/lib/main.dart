@@ -292,7 +292,7 @@ class _HomePageState extends State<HomePage> {
             child: Row(
               children: [
                 Expanded(child: _mainContent()),
-                if (_showInfo) InfoPanel(path: infoPath),
+                if (_showInfo) InfoPanel(path: infoPath, state: _state),
               ],
             ),
           ),

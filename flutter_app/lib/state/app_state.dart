@@ -13,6 +13,7 @@ import '../services/claude_service.dart';
 import '../services/exif_reader.dart';
 import '../services/file_ops.dart';
 import '../services/geo.dart';
+import '../services/metadata_service.dart';
 import '../services/similarity.dart';
 import '../services/vector_ops.dart';
 import '../services/vision_service.dart';
@@ -41,6 +42,9 @@ typedef DateSection = ({DateTime day, List<PhotoItem> items});
 /// 요일별 통계 한 줄(기간). values[0]=일 ~ values[6]=토, 요일당 평균 사진 수.
 typedef WeekdayStat = ({String label, List<double> values});
 
+/// 사진 영역 표시 방식: 그리드 / 리스트(Manage).
+enum GridMode { grid, list }
+
 /// 유사 사진 분석 방식.
 enum SimilarMode { ai, hash }
 
@@ -68,6 +72,7 @@ class AppState extends ChangeNotifier {
   bool _ascending = true;
   RatingFilter _ratingFilter = RatingFilter.all;
   double _thumbSize = 160;
+  GridMode _gridMode = GridMode.grid;
 
   // 다중 선택 (절대 경로)
   final Set<String> _selection = {};
@@ -135,6 +140,13 @@ class AppState extends ChangeNotifier {
   bool get ascending => _ascending;
   RatingFilter get ratingFilter => _ratingFilter;
   double get thumbSize => _thumbSize;
+  GridMode get gridMode => _gridMode;
+
+  void setGridMode(GridMode m) {
+    if (m == _gridMode) return;
+    _gridMode = m;
+    notifyListeners();
+  }
 
   Set<String> get selection => _selection;
   int get selectedCount => _selection.length;
@@ -908,6 +920,18 @@ class AppState extends ChangeNotifier {
     if (group.length < 2) return;
     final sorted = [...group]..sort((a, b) => b.sizeBytes.compareTo(a.sizeBytes));
     await deletePaths([for (final it in sorted.skip(1)) it.path]);
+  }
+
+  /// 촬영일시·GPS를 무손실로 보정한다(EXIF 쓰기). 성공 시 재스캔으로 반영.
+  Future<bool> correctMetadata(String path, {String? dateTime, double? lat, double? lng}) async {
+    final ok = await MetadataService.writeMetadata(
+      path,
+      dateTime: dateTime,
+      lat: lat,
+      lng: lng,
+    );
+    if (ok) await _rescanKeepingFolder();
+    return ok;
   }
 
   Future<String?> renameOne(String path, String newName) async {

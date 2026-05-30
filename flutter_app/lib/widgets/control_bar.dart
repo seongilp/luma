@@ -39,7 +39,9 @@ class ControlBar extends StatelessWidget {
           _sort(),
           const SizedBox(width: 4),
           _orderButton(),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
+          _viewModeToggle(),
+          const SizedBox(width: 12),
           _thumbSlider(),
         ],
       ),
@@ -154,6 +156,24 @@ class ControlBar extends StatelessWidget {
           .map((f) => MacosPopupMenuItem(value: f, child: Text(f.label)))
           .toList(),
       onChanged: (v) => v == null ? null : state.setSort(v),
+    );
+  }
+
+  Widget _viewModeToggle() {
+    final list = state.gridMode == GridMode.list;
+    return Row(
+      children: [
+        MacosIconButton(
+          icon: MacosIcon(CupertinoIcons.square_grid_2x2,
+              size: 15, color: list ? Colors.grey : null),
+          onPressed: () => state.setGridMode(GridMode.grid),
+        ),
+        MacosIconButton(
+          icon: MacosIcon(CupertinoIcons.list_bullet,
+              size: 15, color: list ? null : Colors.grey),
+          onPressed: () => state.setGridMode(GridMode.list),
+        ),
+      ],
     );
   }
 

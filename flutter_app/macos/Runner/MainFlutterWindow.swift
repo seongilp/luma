@@ -1,6 +1,7 @@
 import Cocoa
 import FlutterMacOS
 import ImageIO
+import UniformTypeIdentifiers
 import Vision
 
 class MainFlutterWindow: NSWindow {
@@ -36,6 +37,24 @@ class MainFlutterWindow: NSWindow {
           let lines = VisionBridge.ocr(forPath: path)
           DispatchQueue.main.async { result(lines) }
         }
+      case "writeMetadata":
+        let a = call.arguments as? [String: Any] ?? [:]
+        let path = a["path"] as? String ?? ""
+        let dt = a["dateTime"] as? String
+        let lat = a["lat"] as? Double
+        let lng = a["lng"] as? Double
+        DispatchQueue.global(qos: .userInitiated).async {
+          let ok = MetaBridge.writeMetadata(path: path, dateTime: dt, lat: lat, lng: lng)
+          DispatchQueue.main.async { result(ok) }
+        }
+      case "getTags":
+        let path = (call.arguments as? [String: Any])?["path"] as? String ?? ""
+        result(MetaBridge.getTags(path: path))
+      case "setTags":
+        let a = call.arguments as? [String: Any] ?? [:]
+        let path = a["path"] as? String ?? ""
+        let tags = a["tags"] as? [String] ?? []
+        result(MetaBridge.setTags(path: path, tags: tags))
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -70,7 +89,7 @@ enum VisionBridge {
     let data = obs.data
     guard data.count >= count * MemoryLayout<Float>.size else { return nil }
     var floats = [Float](repeating: 0, count: count)
-    floats.withUnsafeMutableBytes { raw in
+    _ = floats.withUnsafeMutableBytes { raw in
       data.copyBytes(to: raw.bindMemory(to: Float.self))
     }
     return floats.map { Double($0) }
@@ -133,5 +152,59 @@ enum VisionBridge {
     try? handler.perform([req])
     guard let results = req.results else { return [] }
     return results.compactMap { $0.topCandidates(1).first?.string }
+  }
+}
+
+/// EXIF 메타데이터 무손실 쓰기 + Finder 태그 (네이티브).
+enum MetaBridge {
+  /// 촬영일시(EXIF DateTimeOriginal)와 GPS를 무손실로 다시 쓴다(픽셀 재압축 없음).
+  static func writeMetadata(path: String, dateTime: String?, lat: Double?, lng: Double?) -> Bool {
+    let url = URL(fileURLWithPath: path)
+    guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+          let type = CGImageSourceGetType(src) else { return false }
+    var props = (CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]) ?? [:]
+
+    if let dt = dateTime {
+      var exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
+      exif[kCGImagePropertyExifDateTimeOriginal] = dt
+      exif[kCGImagePropertyExifDateTimeDigitized] = dt
+      props[kCGImagePropertyExifDictionary] = exif
+    }
+    if let lat = lat, let lng = lng {
+      var gps: [CFString: Any] = [:]
+      gps[kCGImagePropertyGPSLatitude] = abs(lat)
+      gps[kCGImagePropertyGPSLatitudeRef] = lat >= 0 ? "N" : "S"
+      gps[kCGImagePropertyGPSLongitude] = abs(lng)
+      gps[kCGImagePropertyGPSLongitudeRef] = lng >= 0 ? "E" : "W"
+      props[kCGImagePropertyGPSDictionary] = gps
+    }
+
+    let data = NSMutableData()
+    guard let dest = CGImageDestinationCreateWithData(data, type, 1, nil) else { return false }
+    CGImageDestinationAddImageFromSource(dest, src, 0, props as CFDictionary)
+    guard CGImageDestinationFinalize(dest) else { return false }
+    do {
+      try data.write(to: url, options: .atomic)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  static func getTags(path: String) -> [String] {
+    let url = URL(fileURLWithPath: path)
+    return (try? url.resourceValues(forKeys: [.tagNamesKey]).tagNames) ?? []
+  }
+
+  static func setTags(path: String, tags: [String]) -> Bool {
+    var url = URL(fileURLWithPath: path)
+    var values = URLResourceValues()
+    values.tagNames = tags
+    do {
+      try url.setResourceValues(values)
+      return true
+    } catch {
+      return false
+    }
   }
 }
