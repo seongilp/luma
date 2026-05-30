@@ -14,6 +14,7 @@ import 'widgets/dialogs.dart';
 import 'widgets/folder_sidebar.dart';
 import 'widgets/info_panel.dart';
 import 'widgets/photo_grid.dart';
+import 'widgets/similar_view.dart';
 
 void main() {
   runApp(const PhotoApp());
@@ -64,6 +65,9 @@ class _HomePageState extends State<HomePage> {
             await _state.toggleFavorite(items[3].path);
             await _state.setRating(items[1].path, 4);
           }
+        }
+        if (Platform.environment['PHOTO_SIMILAR'] != null) {
+          await _state.showSimilar();
         }
         final shot = Platform.environment['PHOTO_SHOT'];
         if (shot != null && shot.isNotEmpty) {
@@ -216,7 +220,11 @@ class _HomePageState extends State<HomePage> {
           Expanded(
             child: Row(
               children: [
-                Expanded(child: PhotoGrid(state: _state)),
+                Expanded(
+                  child: _state.view == LibraryView.similar
+                      ? SimilarView(state: _state)
+                      : PhotoGrid(state: _state),
+                ),
                 if (_showInfo) InfoPanel(path: infoPath),
               ],
             ),

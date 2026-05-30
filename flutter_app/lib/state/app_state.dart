@@ -5,9 +5,10 @@ import '../models/photo_item.dart';
 import '../models/photo_meta.dart';
 import '../models/sort_filter.dart';
 import '../services/file_ops.dart';
+import '../services/similarity.dart';
 
 /// 사이드바에서 무엇을 보고 있는지.
-enum LibraryView { all, favorites, folder }
+enum LibraryView { all, favorites, similar, folder }
 
 /// 앱 전역 상태: 보기 선택(스마트/폴더), 보기 옵션(정렬·필터·검색·썸네일크기),
 /// 다중 선택, 사용자 메타데이터, 파일 작업.
@@ -32,6 +33,11 @@ class AppState extends ChangeNotifier {
   // 다중 선택 (절대 경로)
   final Set<String> _selection = {};
   String? _anchor;
+
+  // 유사 사진 분석
+  List<List<PhotoItem>> _similarGroups = [];
+  bool _analyzing = false;
+  double _analyzeProgress = 0;
 
   List<PhotoItem> _visible = [];
 
@@ -62,10 +68,17 @@ class AppState extends ChangeNotifier {
   int get favoriteCount =>
       _allItems.where((it) => meta.get(it.path).favorite).length;
 
+  List<List<PhotoItem>> get similarGroups => _similarGroups;
+  int get similarPhotoCount =>
+      _similarGroups.fold(0, (s, g) => s + g.length);
+  bool get analyzing => _analyzing;
+  double get analyzeProgress => _analyzeProgress;
+
   /// 현재 사이드바 선택의 표시 이름 (툴바 제목용).
   String get viewTitle => switch (_view) {
         LibraryView.all => '모든 사진',
         LibraryView.favorites => '즐겨찾기',
+        LibraryView.similar => '유사 사진',
         LibraryView.folder => selectedFolder?.displayName ?? '',
       };
 
@@ -74,6 +87,7 @@ class AppState extends ChangeNotifier {
         LibraryView.all => _allItems,
         LibraryView.favorites =>
           _allItems.where((it) => meta.get(it.path).favorite).toList(),
+        LibraryView.similar => _similarGroups.expand((g) => g).toList(),
         LibraryView.folder => selectedFolder?.items ?? const [],
       };
 
@@ -90,6 +104,7 @@ class AppState extends ChangeNotifier {
     _error = null;
     _folders = [];
     _allItems = [];
+    _similarGroups = [];
     _view = LibraryView.all;
     _selectedFolder = 0;
     _selection.clear();
@@ -113,12 +128,17 @@ class AppState extends ChangeNotifier {
     final keepPath = selectedFolder?.path;
     _folders = await scanFolders(_root!);
     _allItems = _folders.expand((f) => f.items).toList();
+    _similarGroups = []; // 파일이 바뀌었으니 무효화
     if (keepPath != null) {
       final idx = _folders.indexWhere((f) => f.path == keepPath);
       _selectedFolder = idx >= 0 ? idx : 0;
     }
     _selection.clear();
-    _recompute();
+    if (_view == LibraryView.similar) {
+      await analyzeSimilar();
+    } else {
+      _recompute();
+    }
   }
 
   void showAllPhotos() {
@@ -132,6 +152,35 @@ class AppState extends ChangeNotifier {
     _view = LibraryView.favorites;
     _selection.clear();
     _anchor = null;
+    _recompute();
+  }
+
+  Future<void> showSimilar() async {
+    _view = LibraryView.similar;
+    _selection.clear();
+    _anchor = null;
+    notifyListeners();
+    if (_similarGroups.isEmpty && !_analyzing) {
+      await analyzeSimilar();
+    } else {
+      _recompute();
+    }
+  }
+
+  /// 전체 사진을 분석해 유사 묶음을 만든다 (진행률 알림).
+  Future<void> analyzeSimilar() async {
+    if (_analyzing || _allItems.isEmpty) return;
+    _analyzing = true;
+    _analyzeProgress = 0;
+    notifyListeners();
+    _similarGroups = await findSimilarGroups(
+      _allItems,
+      onProgress: (p) {
+        _analyzeProgress = p;
+        notifyListeners();
+      },
+    );
+    _analyzing = false;
     _recompute();
   }
 

@@ -45,6 +45,14 @@ class FolderSidebar extends StatelessWidget {
           selected: state.view == LibraryView.favorites,
           onTap: state.showFavorites,
         ),
+        _SidebarRow(
+          icon: CupertinoIcons.square_stack_3d_down_right,
+          label: '유사 사진',
+          count: state.similarPhotoCount,
+          showCount: state.similarGroups.isNotEmpty,
+          selected: state.view == LibraryView.similar,
+          onTap: state.showSimilar,
+        ),
         const SizedBox(height: 6),
         const _SectionHeader('폴더'),
         if (state.folders.isEmpty)
@@ -92,6 +100,7 @@ class _SidebarRow extends StatelessWidget {
   final Color? iconColor;
   final String label;
   final int count;
+  final bool showCount;
   final bool selected;
   final VoidCallback onTap;
 
@@ -100,6 +109,7 @@ class _SidebarRow extends StatelessWidget {
     this.iconColor,
     required this.label,
     required this.count,
+    this.showCount = true,
     required this.selected,
     required this.onTap,
   });
@@ -134,13 +144,14 @@ class _SidebarRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            Text(
-              '$count',
-              style: TextStyle(
-                fontSize: 12,
-                color: selected ? Colors.white70 : Colors.grey,
+            if (showCount)
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: selected ? Colors.white70 : Colors.grey,
+                ),
               ),
-            ),
           ],
         ),
       ),
