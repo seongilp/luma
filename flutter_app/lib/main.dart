@@ -33,7 +33,7 @@ class PhotoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MacosApp(
-      title: 'Photo Manager',
+      title: 'LUMA',
       theme: MacosThemeData.light(),
       darkTheme: MacosThemeData.dark(),
       themeMode: ThemeMode.system,
@@ -241,7 +241,7 @@ class _HomePageState extends State<HomePage> {
             ),
             child: MacosScaffold(
               toolBar: ToolBar(
-                title: Text(root != null ? _state.viewTitle : 'Photo Manager'),
+                title: Text(root != null ? _state.viewTitle : 'LUMA'),
                 titleWidth: 240,
                 actions: [
                   CustomToolbarItem(
