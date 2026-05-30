@@ -98,6 +98,9 @@ class _HomePageState extends State<HomePage> {
         if (Platform.environment['PHOTO_STATS'] != null) {
           _state.showStats();
         }
+        if (Platform.environment['PHOTO_LIST'] != null) {
+          _state.setGridMode(GridMode.list);
+        }
         if (Platform.environment['PHOTO_MAP'] != null) {
           await _state.showMap();
           await _state.estimateLocations();
