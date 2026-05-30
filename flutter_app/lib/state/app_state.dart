@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:path/path.dart' as p;
 
 import '../models/app_settings.dart';
 import '../models/folder_group.dart';
@@ -61,6 +62,7 @@ class AppState extends ChangeNotifier {
 
   String? _root;
   List<FolderGroup> _folders = [];
+  List<String> _allDirs = [];
   List<PhotoItem> _allItems = [];
   LibraryView _view = LibraryView.all;
   int _selectedFolder = 0;
@@ -159,9 +161,9 @@ class AppState extends ChangeNotifier {
   LibraryView get view => _view;
   bool get isFolderView => _view == LibraryView.folder;
 
-  /// 사이드바용 디렉토리 트리 (루트 1개).
+  /// 사이드바용 디렉토리 트리 (루트 1개, 빈 폴더 포함).
   List<FolderNode> get folderTree =>
-      _root == null ? const [] : buildFolderTree(_root!, _folders);
+      _root == null ? const [] : buildFolderTree(_root!, _folders, _allDirs);
 
   int get allCount => _allItems.length;
   int get favoriteCount =>
@@ -376,7 +378,9 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _folders = await scanFolders(path);
+      final res = await scanFolders(path);
+      _folders = res.folders;
+      _allDirs = res.dirs;
       _allItems = _folders.expand((f) => f.items).toList();
       _hydrateFromCache(); // 이전 분석 결과 복원
       _error = _folders.isEmpty ? '이 폴더에서 이미지를 찾지 못했습니다.' : null;
@@ -396,7 +400,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> _rescanKeepingFolder() async {
     final keepPath = selectedFolder?.path;
-    _folders = await scanFolders(_root!);
+    final res = await scanFolders(_root!);
+    _folders = res.folders;
+    _allDirs = res.dirs;
     _allItems = _folders.expand((f) => f.items).toList();
     _similarGroups = []; // 파일이 바뀌었으니 무효화
     _vectors.clear();
@@ -418,6 +424,22 @@ class AppState extends ChangeNotifier {
     } else {
       _recompute();
     }
+  }
+
+  /// 새 폴더를 만든다. parentPath 없으면 선택된 폴더(없으면 루트) 아래.
+  /// 성공 시 null, 실패 시 오류 메시지.
+  Future<String?> createFolder(String name, {String? parentPath}) async {
+    final parent = parentPath ?? (isFolderView ? selectedFolder?.path : null) ?? _root;
+    if (parent == null) return '열린 폴더가 없습니다';
+    final dir = Directory(p.join(parent, name));
+    if (await dir.exists()) return '이미 같은 이름의 폴더가 있습니다';
+    try {
+      await dir.create(recursive: true);
+    } catch (e) {
+      return '폴더 생성 실패: $e';
+    }
+    await _rescanKeepingFolder();
+    return null;
   }
 
   void showAllPhotos() {

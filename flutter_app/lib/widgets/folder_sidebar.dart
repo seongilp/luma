@@ -4,6 +4,7 @@ import 'package:macos_ui/macos_ui.dart';
 
 import '../models/folder_node.dart';
 import '../state/app_state.dart';
+import 'dialogs.dart';
 
 /// 좌측 사이드바: 상단 `보관함`(스마트 보기) + 하단 `폴더` 디렉토리 트리.
 class FolderSidebar extends StatefulWidget {
@@ -107,10 +108,24 @@ class _FolderSidebarState extends State<FolderSidebar> {
           onTap: state.showStats,
         ),
         const SizedBox(height: 6),
-        const _SectionHeader('폴더'),
+        _SectionHeader('폴더', trailing: _AddFolderButton(onTap: _createFolder)),
         for (final node in tree) ..._treeRows(node, 0),
       ],
     );
+  }
+
+  Future<void> _createFolder() async {
+    final name = await promptText(
+      context,
+      title: '새 폴더',
+      initial: '새 폴더',
+      confirmLabel: '만들기',
+    );
+    if (name == null) return;
+    final err = await widget.state.createFolder(name);
+    if (err != null && mounted) {
+      await confirm(context, title: '폴더 생성', message: err, confirmLabel: '확인');
+    }
   }
 
   List<Widget> _treeRows(FolderNode node, int depth) {
@@ -237,19 +252,46 @@ class _TreeRow extends StatelessWidget {
 
 class _SectionHeader extends StatelessWidget {
   final String title;
-  const _SectionHeader(this.title);
+  final Widget? trailing;
+  const _SectionHeader(this.title, {this.trailing});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Colors.grey,
-          letterSpacing: 0.3,
+      padding: const EdgeInsets.fromLTRB(8, 8, 4, 4),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const Spacer(),
+          ?trailing,
+        ],
+      ),
+    );
+  }
+}
+
+class _AddFolderButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddFolderButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return MacosTooltip(
+      message: '새 폴더',
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: const Padding(
+          padding: EdgeInsets.all(2),
+          child: Icon(CupertinoIcons.add, size: 14, color: Colors.grey),
         ),
       ),
     );

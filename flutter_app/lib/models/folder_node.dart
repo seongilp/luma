@@ -46,25 +46,28 @@ class _Mut {
   }
 }
 
-/// 스캔된 폴더 목록으로 디렉토리 트리를 만든다 (중간 디렉토리 포함).
-List<FolderNode> buildFolderTree(String root, List<FolderGroup> folders) {
+/// 모든 디렉토리(빈 폴더 포함) + 이미지 폴더 정보로 디렉토리 트리를 만든다.
+List<FolderNode> buildFolderTree(String root, List<FolderGroup> folders, List<String> allDirs) {
   final rootM = _Mut(p.basename(root), root);
+  final byPath = <String, _Mut>{root: rootM};
+
+  _Mut nodeFor(String dirPath) {
+    final existing = byPath[dirPath];
+    if (existing != null) return existing;
+    final parent = nodeFor(p.dirname(dirPath));
+    final m = parent.child(p.basename(dirPath), dirPath);
+    byPath[dirPath] = m;
+    return m;
+  }
+
+  for (final d in allDirs) {
+    if (p.isWithin(root, d)) nodeFor(d);
+  }
   for (var i = 0; i < folders.length; i++) {
     final fg = folders[i];
-    if (fg.path == root) {
-      rootM.folderIndex = i;
-      rootM.direct = fg.count;
-      continue;
-    }
-    final rel = p.relative(fg.path, from: root);
-    var node = rootM;
-    var cur = root;
-    for (final seg in p.split(rel)) {
-      cur = p.join(cur, seg);
-      node = node.child(seg, cur);
-    }
-    node.folderIndex = i;
-    node.direct = fg.count;
+    final m = nodeFor(fg.path);
+    m.folderIndex = i;
+    m.direct = fg.count;
   }
   return [rootM.freeze()];
 }

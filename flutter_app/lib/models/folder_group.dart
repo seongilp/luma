@@ -36,17 +36,21 @@ class _FileRec {
   _FileRec(this.path, this.size, this.modified);
 }
 
-/// `root`를 재귀 스캔해 미디어를 직속 디렉터리별로 묶어 반환한다.
-/// 같은 이름의 RAW+JPG는 한 항목으로 페어링한다.
-Future<List<FolderGroup>> scanFolders(String root) async {
+/// `root`를 재귀 스캔해 미디어를 직속 디렉터리별로 묶고, 모든 하위 디렉터리
+/// 목록(빈 폴더 포함)도 함께 반환한다. RAW+JPG는 한 항목으로 페어링.
+Future<({List<FolderGroup> folders, List<String> dirs})> scanFolders(String root) async {
   final dir = Directory(root);
-  if (!await dir.exists()) return [];
+  if (!await dir.exists()) return (folders: <FolderGroup>[], dirs: <String>[]);
 
-  // 디렉터리별 파일 수집
   final Map<String, List<_FileRec>> byDir = {};
+  final dirs = <String>{};
   final stream = dir.list(recursive: true, followLinks: false);
   await for (final entity
       in stream.handleError((_) {}, test: (e) => e is FileSystemException)) {
+    if (entity is Directory) {
+      dirs.add(entity.path);
+      continue;
+    }
     if (entity is! File) continue;
     if (!isSupportedMedia(entity.path)) continue;
     FileStat st;
@@ -71,7 +75,7 @@ Future<List<FolderGroup>> scanFolders(String root) async {
     ));
   }
   groups.sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
-  return groups;
+  return (folders: groups, dirs: dirs.toList());
 }
 
 /// 같은 폴더 파일들을 PhotoItem으로. RAW와 동명 이미지를 페어링.
