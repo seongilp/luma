@@ -9,6 +9,7 @@ import '../state/app_state.dart';
 import 'analysis_overlay.dart';
 import 'photo_tile.dart';
 import 'photo_viewer.dart';
+import 'scroll_area.dart';
 
 /// 인물 보기: 얼굴 인식으로 같은 사람끼리 묶은 묶음(근사).
 class PeopleView extends StatelessWidget {
@@ -28,8 +29,9 @@ class PeopleView extends StatelessWidget {
               ? const Center(
                   child: Text('인식된 인물이 없습니다',
                       style: TextStyle(color: Colors.grey, fontSize: 15)))
-              : MacosScrollbar(
-                  child: ListView.builder(
+              : ScrollArea(
+                  builder: (controller) => ListView.builder(
+                    controller: controller,
                     padding: const EdgeInsets.all(16),
                     itemCount: groups.length,
                     itemBuilder: (context, i) =>

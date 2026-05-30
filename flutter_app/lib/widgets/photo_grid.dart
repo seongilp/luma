@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:macos_ui/macos_ui.dart';
 
 import '../state/app_state.dart';
 import 'photo_tile.dart';
 import 'photo_viewer.dart';
+import 'scroll_area.dart';
 
 /// 우측 메인: 선택 폴더/보기의 썸네일 그리드.
 class PhotoGrid extends StatelessWidget {
@@ -19,11 +19,12 @@ class PhotoGrid extends StatelessWidget {
       );
     }
 
-    return MacosScrollbar(
-      child: GestureDetector(
+    return ScrollArea(
+      builder: (controller) => GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: state.clearSelection,
         child: GridView.builder(
+          controller: controller,
           padding: const EdgeInsets.all(16),
           gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
             maxCrossAxisExtent: state.thumbSize,

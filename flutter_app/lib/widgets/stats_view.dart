@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 import '../state/app_state.dart';
+import 'scroll_area.dart';
 
 const _weekdayLabels = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -42,8 +43,9 @@ class _StatsViewState extends State<StatsView> {
     ];
     final visible = series.where((s) => !_hidden.contains(s.label)).toList();
 
-    return MacosScrollbar(
-      child: SingleChildScrollView(
+    return ScrollArea(
+      builder: (controller) => SingleChildScrollView(
+        controller: controller,
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

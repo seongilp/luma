@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import 'analysis_overlay.dart';
 import 'photo_tile.dart';
 import 'photo_viewer.dart';
+import 'scroll_area.dart';
 
 const _weekdays = ['월', '화', '수', '목', '금', '토', '일'];
 
@@ -26,8 +27,9 @@ class DateView extends StatelessWidget {
       );
     }
 
-    return MacosScrollbar(
-      child: ListView.builder(
+    return ScrollArea(
+      builder: (controller) => ListView.builder(
+        controller: controller,
         padding: const EdgeInsets.all(16),
         itemCount: sections.length,
         itemBuilder: (context, i) => _Section(state: state, section: sections[i]),

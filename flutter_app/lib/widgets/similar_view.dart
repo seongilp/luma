@@ -8,6 +8,7 @@ import '../state/app_state.dart';
 import 'analysis_overlay.dart';
 import 'photo_tile.dart';
 import 'photo_viewer.dart';
+import 'scroll_area.dart';
 
 /// 유사 사진 보기: 비슷한 사진을 묶음별로 보여준다. (연사·중복 정리용)
 class SimilarView extends StatelessWidget {
@@ -83,8 +84,9 @@ class SimilarView extends StatelessWidget {
       );
     }
 
-    return MacosScrollbar(
-      child: ListView.builder(
+    return ScrollArea(
+      builder: (controller) => ListView.builder(
+        controller: controller,
         padding: const EdgeInsets.all(16),
         itemCount: groups.length,
         itemBuilder: (context, gi) => _Group(state: state, items: groups[gi]),
