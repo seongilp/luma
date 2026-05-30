@@ -167,10 +167,10 @@ class _HomePageState extends State<HomePage> {
     return KeyEventResult.ignored;
   }
 
-  /// 접근성 확대: Option + (확대) / Option − (축소) / Option 0 (원래대로). 앱 전역.
+  /// 접근성 확대: ⌘+ (확대) / ⌘− (축소) / ⌘0 (원래대로). 앱 전역.
   KeyEventResult _onZoomKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    if (!HardwareKeyboard.instance.isAltPressed) return KeyEventResult.ignored;
+    if (!HardwareKeyboard.instance.isMetaPressed) return KeyEventResult.ignored;
     final k = event.logicalKey;
     if (k == LogicalKeyboardKey.equal ||
         k == LogicalKeyboardKey.add ||
