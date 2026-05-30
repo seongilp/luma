@@ -32,10 +32,13 @@ enum LocationKind { gps, content, claude }
 typedef LocatedPhoto = ({String path, LatLng pos, LocationKind kind});
 
 /// 사이드바에서 무엇을 보고 있는지.
-enum LibraryView { all, favorites, similar, map, dates, people, folder }
+enum LibraryView { all, favorites, similar, map, dates, people, stats, folder }
 
 /// 날짜 섹션(하루)과 그날 사진들.
 typedef DateSection = ({DateTime day, List<PhotoItem> items});
+
+/// 요일별 통계 한 줄(기간). values[0]=일 ~ values[6]=토, 요일당 평균 사진 수.
+typedef WeekdayStat = ({String label, List<double> values});
 
 /// 유사 사진 분석 방식.
 enum SimilarMode { ai, hash }
@@ -200,6 +203,41 @@ class AppState extends ChangeNotifier {
   List<List<PhotoItem>> get personGroups => _personGroups;
   int get personCount => _personGroups.length;
 
+  DateTime _dateOf(PhotoItem it) => _dates[it.path] ?? it.modified;
+
+  /// 요일별 통계: 기간별 '요일당 평균 사진 수'(길이 다른 기간을 비교 가능하게 정규화).
+  /// 비교: 이번 주 · 지난주 · 지난달 · 작년(같은 시기).
+  List<WeekdayStat> get weekdayStats {
+    final now = DateTime.now();
+    DateTime atDay(int daysAgo) => DateTime(now.year, now.month, now.day - daysAgo);
+
+    WeekdayStat window(String label, int startDaysAgo, int endDaysAgo) {
+      final start = atDay(startDaysAgo);
+      final endExclusive = atDay(endDaysAgo).add(const Duration(days: 1));
+      final sums = List<int>.filled(7, 0);
+      final dayCounts = List<int>.filled(7, 0);
+      for (var d = start; d.isBefore(endExclusive); d = d.add(const Duration(days: 1))) {
+        dayCounts[d.weekday % 7] += 1;
+      }
+      for (final it in _allItems) {
+        final dt = _dateOf(it);
+        if (dt.isBefore(start) || !dt.isBefore(endExclusive)) continue;
+        sums[dt.weekday % 7] += 1;
+      }
+      return (
+        label: label,
+        values: [for (var w = 0; w < 7; w++) dayCounts[w] == 0 ? 0.0 : sums[w] / dayCounts[w]],
+      );
+    }
+
+    return [
+      window('이번 주', 6, 0),
+      window('지난주', 13, 7),
+      window('지난달', 37, 8),
+      window('작년', 380, 350),
+    ];
+  }
+
   /// 날짜 내림차순 섹션(하루 단위).
   List<DateSection> get dateSections {
     final byDay = <DateTime, List<PhotoItem>>{};
@@ -220,6 +258,7 @@ class AppState extends ChangeNotifier {
         LibraryView.map => '지도',
         LibraryView.dates => '날짜별',
         LibraryView.people => '인물',
+        LibraryView.stats => '통계',
         LibraryView.folder => selectedFolder?.displayName ?? '',
       };
 
@@ -232,6 +271,7 @@ class AppState extends ChangeNotifier {
         LibraryView.map => const [],
         LibraryView.dates => _allItems,
         LibraryView.people => _personGroups.expand((g) => g).toList(),
+        LibraryView.stats => const [],
         LibraryView.folder => selectedFolder?.items ?? const [],
       };
 
@@ -360,6 +400,13 @@ class AppState extends ChangeNotifier {
     _datesLoaded = true;
     _analyzing = false;
     _clearProgress();
+    notifyListeners();
+  }
+
+  void showStats() {
+    _view = LibraryView.stats;
+    _selection.clear();
+    _anchor = null;
     notifyListeners();
   }
 
