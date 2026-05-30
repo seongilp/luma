@@ -41,10 +41,23 @@ pub fn main(init: std.process.Init) !void {
     var viewer = Viewer{};
     defer viewer.close();
 
+    // 검증용: ZIGPHOTO_SHOT 환경변수가 있으면 몇 프레임 뒤 스크린샷 저장 후 종료.
+    const shot_path: ?[*:0]const u8 = std.c.getenv("ZIGPHOTO_SHOT");
+    var frame: u32 = 0;
+
     // 상단 바 높이(그리드는 이 아래로 그려진다고 가정하되 MVP는 간단히 오버레이)
     const top_bar: f32 = 0;
 
     while (!c.WindowShouldClose()) {
+        frame += 1;
+        if (shot_path) |sp| {
+            // 썸네일이 몇 장 올라올 시간을 준 뒤 캡처.
+            if (frame == 30) {
+                c.TakeScreenshot(sp);
+                std.log.info("스크린샷 저장: {s}", .{sp});
+                break;
+            }
+        }
         const sw = c.GetScreenWidth();
         const sh = c.GetScreenHeight();
         const swf: f32 = @floatFromInt(sw);
