@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart' show Colors;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 import '../state/app_state.dart';
@@ -121,20 +122,37 @@ class MapView extends StatelessWidget {
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.zihado.photo_manager',
         ),
-        MarkerLayer(
-          markers: [
-            for (final lp in located)
-              Marker(
-                point: lp.pos,
-                width: 54,
-                height: 54,
-                child: _PinThumb(
-                  path: lp.path,
-                  kind: lp.kind,
-                  onTap: () => _open(context, located, lp.path),
+        MarkerClusterLayerWidget(
+          options: MarkerClusterLayerOptions(
+            maxClusterRadius: 48,
+            size: const Size(44, 44),
+            padding: const EdgeInsets.all(50),
+            markers: [
+              for (final lp in located)
+                Marker(
+                  point: lp.pos,
+                  width: 54,
+                  height: 54,
+                  child: _PinThumb(
+                    path: lp.path,
+                    kind: lp.kind,
+                    onTap: () => _open(context, located, lp.path),
+                  ),
                 ),
+            ],
+            builder: (context, markers) => Container(
+              decoration: const BoxDecoration(
+                color: Colors.blueAccent,
+                shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 4)],
               ),
-          ],
+              child: Center(
+                child: Text('${markers.length}',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+              ),
+            ),
+          ),
         ),
       ],
     );
