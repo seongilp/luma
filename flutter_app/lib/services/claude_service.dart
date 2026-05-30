@@ -102,6 +102,56 @@ class ClaudeService {
     }
   }
 
+  /// AI 빠른 점검: 사진을 보고 내용·노출/초점/구도·개선 팁을 간단히.
+  Future<String?> quickCheck(String imagePath) async {
+    final b64 = await _downscaledJpegBase64(imagePath);
+    if (b64 == null) return null;
+    final headers = <String, String>{
+      'content-type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (config.apiKey != null && config.apiKey!.isNotEmpty) {
+      headers['x-api-key'] = config.apiKey!;
+    }
+    if (config.cfToken != null && config.cfToken!.isNotEmpty) {
+      headers['cf-aig-authorization'] = 'Bearer ${config.cfToken}';
+    }
+    final body = jsonEncode({
+      'model': _model,
+      'max_tokens': 300,
+      'messages': [
+        {
+          'role': 'user',
+          'content': [
+            {
+              'type': 'image',
+              'source': {'type': 'base64', 'media_type': 'image/jpeg', 'data': b64},
+            },
+            {
+              'type': 'text',
+              'text': '이 사진을 빠르게 점검해줘. 한국어로 간결하게: '
+                  '① 무엇이 담겼는지 ② 노출·초점·구도 등 눈에 띄는 점 ③ 개선 팁. '
+                  '각 항목 1~2줄.',
+            },
+          ],
+        },
+      ],
+    });
+    try {
+      final resp = await http.post(Uri.parse('${config.baseUrl}/v1/messages'),
+          headers: headers, body: body);
+      if (resp.statusCode != 200) return null;
+      final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+      final content = (data['content'] as List?)?.firstWhere(
+        (c) => c['type'] == 'text',
+        orElse: () => null,
+      );
+      return content?['text'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   ClaudeLocation? _parse(String text) {
     // ```json ... ``` 펜스 제거 후 JSON 파싱
     final start = text.indexOf('{');

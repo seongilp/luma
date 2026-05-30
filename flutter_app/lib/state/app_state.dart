@@ -677,6 +677,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// AI 빠른 점검 (Claude). 자격증명 없으면 null.
+  Future<String?> quickCheck(String path) async {
+    if (!claudeConfigured) return null;
+    return _claude.quickCheck(path);
+  }
+
   void setSimilarMode(SimilarMode mode) {
     if (mode == _similarMode) return;
     _similarMode = mode;

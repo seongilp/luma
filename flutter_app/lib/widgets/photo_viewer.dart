@@ -75,7 +75,64 @@ class _PhotoViewerState extends State<PhotoViewer> {
   }
 
   bool _ocrBusy = false;
+  bool _qcBusy = false;
   bool _filmstrip = false;
+
+  Future<void> _runQuickCheck() async {
+    if (_qcBusy) return;
+    setState(() => _qcBusy = true);
+    final result = await widget.state.quickCheck(widget.paths[_index]);
+    if (!mounted) return;
+    setState(() => _qcBusy = false);
+    await _showTextSheet('AI Quick Check', result ?? '점검 결과를 받지 못했습니다.', copyable: false);
+  }
+
+  Future<void> _showTextSheet(String title, String text, {bool copyable = true}) async {
+    await showMacosSheet(
+      context: context,
+      builder: (ctx) => MacosSheet(
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460, maxHeight: 360),
+                child: SingleChildScrollView(
+                  child: SelectableText(text, style: const TextStyle(fontSize: 14)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (copyable)
+                    PushButton(
+                      controlSize: ControlSize.large,
+                      secondary: true,
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: text));
+                        Navigator.of(ctx).pop();
+                      },
+                      child: const Text('복사'),
+                    ),
+                  const SizedBox(width: 10),
+                  PushButton(
+                    controlSize: ControlSize.large,
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('닫기'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _runOcr() async {
     if (_ocrBusy) return;
@@ -327,6 +384,14 @@ class _PhotoViewerState extends State<PhotoViewer> {
                       color: Colors.white,
                       onTap: _runOcr,
                     ),
+                    if (widget.state.claudeConfigured) ...[
+                      const SizedBox(width: 14),
+                      _BarIcon(
+                        icon: _qcBusy ? CupertinoIcons.hourglass : CupertinoIcons.sparkles,
+                        color: Colors.white,
+                        onTap: _runQuickCheck,
+                      ),
+                    ],
                   ],
                   const SizedBox(width: 14),
                   _BarIcon(
