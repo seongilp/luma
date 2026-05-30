@@ -22,6 +22,9 @@ const double _kSimilarThreshold = 0.6;
 /// 내용 기반 위치추정: 이 거리 안에 GPS 사진이 있으면 같은 장소로 본다.
 const double _kLocationThreshold = 0.9;
 
+/// 얼굴 근사 임베딩 거리 임계값 (같은 사람 판단). 근사라 다소 보수적.
+const double _kFaceThreshold = 0.7;
+
 /// 위치 출처: 실제 GPS / 사진내용(Vision 매칭) / Claude(클라우드).
 enum LocationKind { gps, content, claude }
 
@@ -29,7 +32,7 @@ enum LocationKind { gps, content, claude }
 typedef LocatedPhoto = ({String path, LatLng pos, LocationKind kind});
 
 /// 사이드바에서 무엇을 보고 있는지.
-enum LibraryView { all, favorites, similar, map, dates, folder }
+enum LibraryView { all, favorites, similar, map, dates, people, folder }
 
 /// 날짜 섹션(하루)과 그날 사진들.
 typedef DateSection = ({DateTime day, List<PhotoItem> items});
@@ -77,6 +80,10 @@ class AppState extends ChangeNotifier {
   // 날짜별 앨범 (촬영일, 없으면 파일 수정일)
   final Map<String, DateTime> _dates = {};
   bool _datesLoaded = false;
+
+  // 인물(얼굴) 분류
+  List<List<PhotoItem>> _personGroups = [];
+  bool _peopleLoaded = false;
 
   // 진행 상태(분석 화면용): 무엇을·몇 번째·어떤 파일
   String _progressPhase = '';
@@ -190,6 +197,9 @@ class AppState extends ChangeNotifier {
     return out;
   }
 
+  List<List<PhotoItem>> get personGroups => _personGroups;
+  int get personCount => _personGroups.length;
+
   /// 날짜 내림차순 섹션(하루 단위).
   List<DateSection> get dateSections {
     final byDay = <DateTime, List<PhotoItem>>{};
@@ -209,6 +219,7 @@ class AppState extends ChangeNotifier {
         LibraryView.similar => '유사 사진',
         LibraryView.map => '지도',
         LibraryView.dates => '날짜별',
+        LibraryView.people => '인물',
         LibraryView.folder => selectedFolder?.displayName ?? '',
       };
 
@@ -220,6 +231,7 @@ class AppState extends ChangeNotifier {
         LibraryView.similar => _similarGroups.expand((g) => g).toList(),
         LibraryView.map => const [],
         LibraryView.dates => _allItems,
+        LibraryView.people => _personGroups.expand((g) => g).toList(),
         LibraryView.folder => selectedFolder?.items ?? const [],
       };
 
@@ -250,6 +262,8 @@ class AppState extends ChangeNotifier {
     _vectors.clear();
     _dates.clear();
     _datesLoaded = false;
+    _personGroups = [];
+    _peopleLoaded = false;
     _geo.clear();
     _estimatedGeo.clear();
     _claudeGeo.clear();
@@ -281,6 +295,8 @@ class AppState extends ChangeNotifier {
     _vectors.clear();
     _dates.clear();
     _datesLoaded = false;
+    _personGroups = [];
+    _peopleLoaded = false;
     _geo.clear();
     _estimatedGeo.clear();
     _claudeGeo.clear();
@@ -345,6 +361,53 @@ class AppState extends ChangeNotifier {
     _analyzing = false;
     _clearProgress();
     notifyListeners();
+  }
+
+  Future<void> showPeople() async {
+    _view = LibraryView.people;
+    _selection.clear();
+    _anchor = null;
+    notifyListeners();
+    if (!_peopleLoaded && !_analyzing) await analyzeFaces();
+  }
+
+  /// 모든 사진에서 얼굴을 검출·임베딩해 같은 사람끼리 묶는다 (근사).
+  Future<void> analyzeFaces() async {
+    if (_analyzing || _allItems.isEmpty) return;
+    _analyzing = true;
+    notifyListeners();
+
+    // 모든 얼굴 벡터 수집 (어떤 사진의 얼굴인지 함께)
+    final faceVecs = <List<double>>[];
+    final facePhoto = <PhotoItem>[];
+    for (var i = 0; i < _allItems.length; i++) {
+      _setProgress('인물(얼굴) 인식', i + 1, _allItems.length, _allItems[i].path);
+      final faces = await VisionService.faces(_allItems[i].path);
+      for (final f in faces) {
+        faceVecs.add(f.vector);
+        facePhoto.add(_allItems[i]);
+      }
+    }
+
+    // 얼굴 벡터 클러스터링 → 사람별 사진 묶음(사진 중복 제거)
+    final parts = partitionByDistance(faceVecs, _kFaceThreshold);
+    final groups = <List<PhotoItem>>[];
+    for (final part in parts) {
+      final seen = <String>{};
+      final photos = <PhotoItem>[];
+      for (final idx in part) {
+        final it = facePhoto[idx];
+        if (seen.add(it.path)) photos.add(it);
+      }
+      groups.add(photos);
+    }
+    groups.sort((a, b) => b.length.compareTo(a.length));
+
+    _personGroups = groups;
+    _peopleLoaded = true;
+    _analyzing = false;
+    _clearProgress();
+    _recompute();
   }
 
   Future<void> showMap() async {

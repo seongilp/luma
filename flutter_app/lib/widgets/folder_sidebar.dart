@@ -70,6 +70,14 @@ class FolderSidebar extends StatelessWidget {
           selected: state.view == LibraryView.dates,
           onTap: state.showDates,
         ),
+        _SidebarRow(
+          icon: CupertinoIcons.person_2_fill,
+          label: '인물',
+          count: state.personCount,
+          showCount: state.personGroups.isNotEmpty,
+          selected: state.view == LibraryView.people,
+          onTap: state.showPeople,
+        ),
         const SizedBox(height: 6),
         const _SectionHeader('폴더'),
         if (state.folders.isEmpty)

@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import ImageIO
 import Vision
 
 class MainFlutterWindow: NSWindow {
@@ -22,6 +23,12 @@ class MainFlutterWindow: NSWindow {
         DispatchQueue.global(qos: .userInitiated).async {
           let vec = VisionBridge.featureVector(forPath: path)
           DispatchQueue.main.async { result(vec) }
+        }
+      case "faces":
+        let path = (call.arguments as? [String: Any])?["path"] as? String ?? ""
+        DispatchQueue.global(qos: .userInitiated).async {
+          let faces = VisionBridge.faces(forPath: path)
+          DispatchQueue.main.async { result(faces) }
         }
       default:
         result(FlutterMethodNotImplemented)
@@ -49,6 +56,10 @@ enum VisionBridge {
   /// 특징벡터를 Double 배열로. 실패 시 nil.
   static func featureVector(forPath path: String) -> [Double]? {
     guard let obs = featurePrint(forPath: path) else { return nil }
+    return vectorFromObservation(obs)
+  }
+
+  static func vectorFromObservation(_ obs: VNFeaturePrintObservation) -> [Double]? {
     let count = obs.elementCount
     let data = obs.data
     guard data.count >= count * MemoryLayout<Float>.size else { return nil }
@@ -57,5 +68,47 @@ enum VisionBridge {
       data.copyBytes(to: raw.bindMemory(to: Float.self))
     }
     return floats.map { Double($0) }
+  }
+
+  /// 사진에서 얼굴을 검출해, 각 얼굴 영역의 특징벡터와 위치(0~1, 좌상단 기준)를 반환.
+  /// 동일인 식별용 임베딩이 공개 API에 없어, 얼굴 크롭의 특징벡터로 근사한다.
+  static func faces(forPath path: String) -> [[String: Any]] {
+    let url = URL(fileURLWithPath: path)
+    guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+          let cg = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return [] }
+    let w = cg.width
+    let h = cg.height
+
+    let req = VNDetectFaceRectanglesRequest()
+    let handler = VNImageRequestHandler(cgImage: cg, options: [:])
+    try? handler.perform([req])
+    guard let results = req.results else { return [] }
+
+    var out: [[String: Any]] = []
+    for face in results {
+      let bb = face.boundingBox // 정규화, 좌하단 원점
+      let pw = Int(bb.width * CGFloat(w))
+      let ph = Int(bb.height * CGFloat(h))
+      let px = Int(bb.minX * CGFloat(w))
+      let pyTop = Int((1.0 - bb.minY - bb.height) * CGFloat(h))
+      if pw < 24 || ph < 24 { continue }
+      let rect = CGRect(x: px, y: pyTop, width: pw, height: ph).integral
+      guard let crop = cg.cropping(to: rect) else { continue }
+
+      let fp = VNGenerateImageFeaturePrintRequest()
+      let h2 = VNImageRequestHandler(cgImage: crop, options: [:])
+      try? h2.perform([fp])
+      guard let obs = fp.results?.first as? VNFeaturePrintObservation,
+            let vec = vectorFromObservation(obs) else { continue }
+
+      out.append([
+        "vector": vec,
+        "x": Double(bb.minX),
+        "y": Double(1.0 - bb.minY - bb.height),
+        "w": Double(bb.width),
+        "h": Double(bb.height),
+      ])
+    }
+    return out
   }
 }

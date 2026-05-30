@@ -16,6 +16,7 @@ import 'widgets/dialogs.dart';
 import 'widgets/folder_sidebar.dart';
 import 'widgets/info_panel.dart';
 import 'widgets/map_view.dart';
+import 'widgets/people_view.dart';
 import 'widgets/photo_grid.dart';
 import 'widgets/settings_sheet.dart';
 import 'widgets/similar_view.dart';
@@ -78,6 +79,9 @@ class _HomePageState extends State<HomePage> {
         }
         if (Platform.environment['PHOTO_SIMILAR'] != null) {
           await _state.showSimilar();
+        }
+        if (Platform.environment['PHOTO_PEOPLE'] != null) {
+          await _state.showPeople();
         }
         if (Platform.environment['PHOTO_MAP'] != null) {
           await _state.showMap();
@@ -275,6 +279,8 @@ class _HomePageState extends State<HomePage> {
         return MapView(state: _state);
       case LibraryView.dates:
         return DateView(state: _state);
+      case LibraryView.people:
+        return PeopleView(state: _state);
       default:
         return PhotoGrid(state: _state);
     }
