@@ -38,24 +38,10 @@ class PhotoGrid extends StatelessWidget {
   }
 
   Widget _buildList(BuildContext context, List<PhotoItem> items) {
-    return Column(
-      children: [
-        _ListHeader(state: state),
-        Expanded(
-          child: ScrollArea(
-            builder: (controller) => ListView.builder(
-              controller: controller,
-              padding: EdgeInsets.zero,
-              itemCount: items.length,
-              itemBuilder: (context, index) => _ManageRow(
-                state: state,
-                item: items[index],
-                onOpen: () => _openViewer(context, index),
-              ),
-            ),
-          ),
-        ),
-      ],
+    return _ManageList(
+      state: state,
+      items: items,
+      onOpen: (i) => _openViewer(context, i),
     );
   }
 
@@ -149,6 +135,73 @@ class _ListHeader extends StatelessWidget {
                 size: 10, color: cs.primary),
         ],
       ),
+    );
+  }
+}
+
+/// 탐색기식 리스트. 방향키로 커서가 화면 밖으로 나가면 자동 스크롤한다.
+class _ManageList extends StatefulWidget {
+  final AppState state;
+  final List<PhotoItem> items;
+  final void Function(int index) onOpen;
+  const _ManageList(
+      {required this.state, required this.items, required this.onOpen});
+
+  @override
+  State<_ManageList> createState() => _ManageListState();
+}
+
+class _ManageListState extends State<_ManageList> {
+  static const double _rowH = 49; // 행 높이(46) + 상하 마진(1.5*2)
+  ScrollController? _sc;
+  int? _lastCursor;
+
+  void _ensureCursorVisible() {
+    final c = _sc;
+    if (c == null || !c.hasClients) return;
+    final i = widget.state.cursorIndex;
+    if (i == _lastCursor) return; // 커서가 그대로면 사용자 스크롤을 방해하지 않음
+    _lastCursor = i;
+    final top = i * _rowH;
+    final bottom = top + _rowH;
+    final vt = c.offset;
+    final vb = vt + c.position.viewportDimension;
+    double? target;
+    if (top < vt) {
+      target = top;
+    } else if (bottom > vb) {
+      target = bottom - c.position.viewportDimension;
+    }
+    if (target != null) {
+      c.jumpTo(target.clamp(0.0, c.position.maxScrollExtent));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _ensureCursorVisible());
+    return Column(
+      children: [
+        _ListHeader(state: widget.state),
+        Expanded(
+          child: ScrollArea(
+            builder: (controller) {
+              _sc = controller;
+              return ListView.builder(
+                controller: controller,
+                padding: EdgeInsets.zero,
+                itemCount: widget.items.length,
+                itemBuilder: (context, index) => _ManageRow(
+                  state: widget.state,
+                  item: widget.items[index],
+                  onOpen: () => widget.onOpen(index),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

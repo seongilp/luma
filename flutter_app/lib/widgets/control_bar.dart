@@ -90,22 +90,36 @@ class ControlBar extends StatelessWidget {
 
   Future<void> _delete(BuildContext context) async {
     final n = state.selectedCount;
+    final messenger = ScaffoldMessenger.of(context);
     if (!state.confirmDelete) {
-      await state.deleteSelected();
+      final err = await state.deleteSelected();
+      if (err != null) {
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(err), behavior: SnackBarBehavior.floating));
+      }
       return;
     }
     final ok = await confirm(context,
         title: '휴지통으로 이동', message: '$n개의 사진을 휴지통으로 보낼까요?');
-    if (ok) await state.deleteSelected();
+    if (!ok) return;
+    final err = await state.deleteSelected();
+    if (err != null) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(err), behavior: SnackBarBehavior.floating));
+    }
   }
 
   Future<void> _move(BuildContext context, {required bool copy}) async {
+    final messenger = ScaffoldMessenger.of(context);
     final dest = await getDirectoryPath(confirmButtonText: copy ? '복사' : '이동');
     if (dest == null) return;
-    if (copy) {
-      await state.copySelected(dest);
-    } else {
-      await state.moveSelected(dest);
+    final err = copy ? await state.copySelected(dest) : await state.moveSelected(dest);
+    if (err != null) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(err), behavior: SnackBarBehavior.floating));
     }
   }
 
@@ -121,16 +135,25 @@ class ControlBar extends StatelessWidget {
   }
 
   Future<void> _export(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
     final fmt = await pickExportFormat(context);
     if (fmt == null) return;
     final dest = await getDirectoryPath(confirmButtonText: '여기로 내보내기');
     if (dest == null) return;
-    await FileOps.exportImages(
+    final total = state.selectedCount;
+    final n = await FileOps.exportImages(
       state.selection.toList(),
       dest,
       format: fmt.format,
       maxDim: fmt.maxDim,
     );
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+          content: Text(n == total
+              ? '$n개 내보내기 완료'
+              : '$n/$total개 내보냄 (나머지는 미지원 형식이거나 실패)'),
+          behavior: SnackBarBehavior.floating));
   }
 
   // ── 별점/즐겨찾기 필터 ────────────────────────────────────

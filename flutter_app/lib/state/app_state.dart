@@ -71,6 +71,8 @@ class AppState extends ChangeNotifier {
   final AnalysisCache _cache = AnalysisCache();
 
   List<String> _roots = [];
+  // 스캔(루트 변경·재스캔) 세대. 분석 루프가 캡처해 도중 변경 시 중단 판정.
+  int _scanGen = 0;
   List<FolderGroup> _folders = [];
   List<String> _allDirs = [];
   List<PhotoItem> _allItems = [];
@@ -421,6 +423,7 @@ class AppState extends ChangeNotifier {
 
   /// 라이브러리 루트 집합을 통째로 교체하고 다시 스캔한다. 분석 결과는 무효화.
   Future<void> setRoots(List<String> paths) async {
+    _scanGen++; // 진행 중 분석 무효화
     _roots = _dedupRoots(paths);
     _loading = true;
     _error = null;
@@ -477,6 +480,7 @@ class AppState extends ChangeNotifier {
       setRoots(_roots.where((r) => r != path).toList());
 
   Future<void> _rescanKeepingFolder() async {
+    _scanGen++; // 파일이 바뀌었으니 진행 중 분석 무효화
     final keepPath = selectedFolder?.path;
     final res = await _scanAll(_roots);
     _folders = res.folders;
@@ -606,7 +610,12 @@ class AppState extends ChangeNotifier {
     // 모든 얼굴 벡터 수집 (어떤 사진의 얼굴인지 함께)
     final faceVecs = <List<double>>[];
     final facePhoto = <PhotoItem>[];
+    final gen = _scanGen;
     for (var i = 0; i < _allItems.length; i++) {
+      if (gen != _scanGen) {
+        _analyzing = false;
+        return;
+      }
       _setProgress('인물(얼굴) 인식', i + 1, _allItems.length, _allItems[i].path);
       final it = _allItems[i];
       final e = _entry(it);
@@ -664,7 +673,12 @@ class AppState extends ChangeNotifier {
     _geoProgress = 0;
     _geo.clear();
     notifyListeners();
+    final gen = _scanGen;
     for (var i = 0; i < _allItems.length; i++) {
+      if (gen != _scanGen) {
+        _geoLoading = false;
+        return;
+      }
       _setProgress('위치(GPS) 읽는 중', i + 1, _allItems.length, _allItems[i].path);
       final it = _allItems[i];
       final e = _entry(it);
@@ -780,7 +794,9 @@ class AppState extends ChangeNotifier {
     if (cap > 0 && groups.length > cap) {
       groups = ([...groups]..sort((a, b) => b.length.compareTo(a.length))).take(cap).toList();
     }
+    final gen = _scanGen;
     for (var i = 0; i < groups.length; i++) {
+      if (gen != _scanGen) break; // 폴더가 바뀜 → 중단(이미 한 건 캐시 저장)
       final rep = groups[i].first;
       _setProgress('위치 분석 (Claude)', i + 1, groups.length, rep.path);
       final loc = await _claude.identifyLocation(rep.path);
@@ -847,7 +863,9 @@ class AppState extends ChangeNotifier {
     // 캐시(hydrate)로 이미 채워진 사진은 _vectors에 있으므로 자동 제외.
     final todo = [for (final it in _allItems) if (!_vectors.containsKey(it.path)) it];
     if (todo.isEmpty) return _vectors.isNotEmpty;
+    final gen = _scanGen;
     for (var i = 0; i < todo.length; i++) {
+      if (gen != _scanGen) return false; // 폴더가 바뀜 → 중단
       _setProgress(phase, i + 1, todo.length, todo[i].path);
       final v = await VisionService.featurePrint(todo[i].path);
       if (v == null) {
@@ -1118,16 +1136,20 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> moveSelected(String destDir) async {
-    final moved = await FileOps.move(_selection.toList(), destDir);
-    for (final e in moved.entries) {
+  /// 이동. 실패가 있으면 메시지, 전부 성공이면 null.
+  Future<String?> moveSelected(String destDir) async {
+    final r = await FileOps.move(_selection.toList(), destDir);
+    for (final e in r.moved.entries) {
       await meta.rename(e.key, e.value);
     }
     await _rescanKeepingFolder();
+    return r.failed == 0 ? null : '${r.failed}개를 이동하지 못했습니다.';
   }
 
-  Future<void> copySelected(String destDir) async {
-    await FileOps.copy(_selection.toList(), destDir);
+  /// 복사. 실패가 있으면 메시지, 전부 성공이면 null.
+  Future<String?> copySelected(String destDir) async {
+    final r = await FileOps.copy(_selection.toList(), destDir);
     await _rescanKeepingFolder();
+    return r.failed == 0 ? null : '${r.failed}개를 복사하지 못했습니다.';
   }
 }

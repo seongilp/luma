@@ -64,6 +64,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
   @override
   void dispose() {
     _chromeTimer?.cancel();
+    _flashTimer?.cancel();
     _controller.dispose();
     _focus.dispose();
     super.dispose();
@@ -78,6 +79,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
   }
 
   bool _flash = false;
+  Timer? _flashTimer;
 
   /// 빠른 리뷰: 현재 사진을 즐겨찾기(이미 즐겨찾기면 유지)하고 다음으로.
   void _favoriteAndNext() {
@@ -86,7 +88,8 @@ class _PhotoViewerState extends State<PhotoViewer> {
       widget.state.toggleFavorite(path);
     }
     setState(() => _flash = true);
-    Future.delayed(const Duration(milliseconds: 420), () {
+    _flashTimer?.cancel();
+    _flashTimer = Timer(const Duration(milliseconds: 420), () {
       if (mounted) setState(() => _flash = false);
     });
     _move(1);
@@ -481,6 +484,7 @@ class _VideoView extends StatefulWidget {
 class _VideoViewState extends State<_VideoView> {
   late final VideoPlayerController _controller;
   bool _ready = false;
+  bool _error = false;
 
   @override
   void initState() {
@@ -492,7 +496,9 @@ class _VideoViewState extends State<_VideoView> {
         _controller
           ..setLooping(true)
           ..play();
-      }).catchError((_) {});
+      }).catchError((_) {
+        if (mounted) setState(() => _error = true);
+      });
   }
 
   @override
@@ -503,6 +509,20 @@ class _VideoViewState extends State<_VideoView> {
 
   @override
   Widget build(BuildContext context) {
+    if (_error) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(CupertinoIcons.exclamationmark_triangle,
+                color: Colors.white54, size: 40),
+            SizedBox(height: 10),
+            Text('동영상을 재생할 수 없습니다',
+                style: TextStyle(color: Colors.white70, fontSize: 15)),
+          ],
+        ),
+      );
+    }
     if (!_ready) {
       return const Center(child: CircularProgressIndicator(color: Colors.white));
     }

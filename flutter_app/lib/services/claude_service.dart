@@ -1,8 +1,20 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
+
+/// 긴 변 768px JPEG로 축소 후 base64 (무거운 디코드 → isolate).
+String? _downscaleToBase64(Uint8List bytes) {
+  final decoded = img.decodeImage(bytes);
+  if (decoded == null) return null;
+  final resized = decoded.width > decoded.height
+      ? img.copyResize(decoded, width: 768)
+      : img.copyResize(decoded, height: 768);
+  return base64Encode(img.encodeJpg(resized, quality: 80));
+}
 
 /// Claude(멀티모달) 설정. 직접 키 또는 Cloudflare AI Gateway(BYOK)를 지원.
 /// 비밀은 코드에 두지 않고 환경변수에서 읽는다.
@@ -83,11 +95,13 @@ class ClaudeService {
     });
 
     try {
-      final resp = await http.post(
-        Uri.parse('${config.baseUrl}/v1/messages'),
-        headers: headers,
-        body: body,
-      );
+      final resp = await http
+          .post(
+            Uri.parse('${config.baseUrl}/v1/messages'),
+            headers: headers,
+            body: body,
+          )
+          .timeout(const Duration(seconds: 30));
       if (resp.statusCode != 200) return null;
       final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
       final content = (data['content'] as List?)?.firstWhere(
@@ -138,8 +152,10 @@ class ClaudeService {
       ],
     });
     try {
-      final resp = await http.post(Uri.parse('${config.baseUrl}/v1/messages'),
-          headers: headers, body: body);
+      final resp = await http
+          .post(Uri.parse('${config.baseUrl}/v1/messages'),
+              headers: headers, body: body)
+          .timeout(const Duration(seconds: 30));
       if (resp.statusCode != 200) return null;
       final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
       final content = (data['content'] as List?)?.firstWhere(
@@ -175,13 +191,7 @@ class ClaudeService {
   Future<String?> _downscaledJpegBase64(String path) async {
     try {
       final bytes = await File(path).readAsBytes();
-      final decoded = img.decodeImage(bytes);
-      if (decoded == null) return null;
-      final resized = decoded.width > decoded.height
-          ? img.copyResize(decoded, width: 768)
-          : img.copyResize(decoded, height: 768);
-      final jpeg = img.encodeJpg(resized, quality: 80);
-      return base64Encode(jpeg);
+      return await compute(_downscaleToBase64, bytes);
     } catch (_) {
       return null;
     }

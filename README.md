@@ -23,18 +23,25 @@
 
 **관리 / 워크플로우**
 - 그리드 · 탐색기식 리스트 · 필름스트립 · 폴더 트리
-- 다중 선택, 삭제(휴지통)·이름변경·이동/복사, 즐겨찾기·별점
+- **여러 맥 폴더를 한 라이브러리로** 추가·합본(멀티루트), 폴더 클릭 시 하위 포함 그 폴더만 보기
+- 다중 선택(클릭·⌘·⇧·**드래그 마퀴**), 삭제(휴지통)·이름변경·이동/복사, 즐겨찾기·별점
 - 2~4장 동기화 비교 + 기준(Reference) 비교
 - RAW+JPG 페어링, 동영상(MP4/MOV/M4V) 재생, 히스토그램
 - 무손실 EXIF 날짜·GPS 보정, Finder 태그, Lightroom XMP 연동
 - 내보내기(JPEG/PNG) + SNS 프리셋, ZIP 바로 열기, Finder식 자연 정렬
-- 접근성 확대(⌘ +/−/0), 마지막 폴더 자동 열기
+- 사이드바 크기 조절·접기, 라이트/다크 테마, 작업 실패 시 알림(SnackBar)
+
+**키보드 / 단축키**
+- `↑↓←→` 선택 이동, `⇧+방향키` 범위 선택, `Space` 미리보기
+- `⌘K` 커맨드 팔레트, `⌘,` 설정, `⌘A` 전체 선택, `Delete` 휴지통
+- `⌘ +/−/0` 접근성 확대/축소/초기화
+- 뷰어: `Space` 즐겨찾기+다음(빠른 리뷰), 마우스 멈추면 컨트롤 자동 숨김
 
 ## 🧱 스택
 
-- **Flutter** (macOS desktop) + `macos_ui`
+- **Flutter** (macOS desktop) · **Material 3 (Material You)** · 중립 라이트/다크 테마
 - **Apple Vision** (Swift 브리지): 특징벡터·얼굴 검출·OCR·무손실 메타데이터 쓰기
-- **Claude** (Anthropic API, 선택): 위치 추정·Quick Check — 자격증명은 설정/환경변수로만
+- **Claude** (Anthropic API, 선택): 위치 추정·Quick Check — 자격증명은 설정/환경변수로만 (30초 타임아웃)
 
 ## 🚀 실행
 
@@ -42,6 +49,8 @@
 cd flutter_app
 flutter run -d macos                 # 디버그
 flutter build macos --release        # 릴리즈 빌드 (build/macos/.../LUMA.app)
+flutter test                         # 단위 테스트
+dart run tool/gen_icon.dart          # 앱 아이콘 재생성
 ```
 
 Claude 기능을 쓰려면 설정창에 API 키(또는 `ANTHROPIC_API_KEY` / Cloudflare AI Gateway) 입력.
