@@ -9,21 +9,27 @@ Future<String?> promptText(
 }) async {
   final controller = TextEditingController(text: initial);
   String? result;
+  void submit(BuildContext ctx) {
+    result = controller.text.trim();
+    Navigator.of(ctx).pop();
+  }
+
   await showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(title),
-      content: TextField(controller: controller, autofocus: true),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        onSubmitted: (_) => submit(ctx), // Enter로 확정
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(),
           child: const Text('취소'),
         ),
         FilledButton(
-          onPressed: () {
-            result = controller.text.trim();
-            Navigator.of(ctx).pop();
-          },
+          onPressed: () => submit(ctx),
           child: Text(confirmLabel),
         ),
       ],
@@ -52,6 +58,7 @@ Future<bool> confirm(
           child: const Text('취소'),
         ),
         FilledButton(
+          autofocus: true, // Enter로 바로 확정
           onPressed: () {
             ok = true;
             Navigator.of(ctx).pop();

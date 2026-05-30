@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../models/folder_node.dart';
+import '../services/file_ops.dart';
 import '../state/app_state.dart';
 
 /// 좌측 사이드바: 상단 `보관함`(스마트 보기) + 하단 `폴더` 디렉토리 트리.
@@ -120,6 +121,14 @@ class _FolderSidebarState extends State<FolderSidebar> {
           showCount: false,
           selected: state.view == LibraryView.stats,
           onTap: state.showStats,
+        ),
+        _SidebarRow(
+          icon: CupertinoIcons.trash,
+          label: '휴지통',
+          count: 0,
+          showCount: false,
+          selected: false,
+          onTap: FileOps.openTrash,
         ),
         const SizedBox(height: 6),
         _SectionHeader('폴더', trailing: _AddFolderButton(onTap: _addLocation)),

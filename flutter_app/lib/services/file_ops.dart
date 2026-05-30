@@ -28,6 +28,15 @@ class FileOps {
     } catch (_) {}
   }
 
+  /// macOS 휴지통을 Finder에서 연다(삭제한 사진 복구·영구삭제용).
+  static Future<void> openTrash() async {
+    final home = Platform.environment['HOME'];
+    if (home == null) return;
+    try {
+      await Process.run('open', ['$home/.Trash']);
+    } catch (_) {}
+  }
+
   /// 선택 이미지를 JPEG/PNG로 내보낸다(선택적 긴 변 축소). 내보낸 개수 반환.
   static Future<int> exportImages(
     List<String> paths,
