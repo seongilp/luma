@@ -6,13 +6,18 @@ import '../models/photo_meta.dart';
 import '../models/sort_filter.dart';
 import '../services/file_ops.dart';
 
-/// 앱 전역 상태: 폴더/선택폴더, 보기 옵션(정렬·필터·검색·썸네일크기),
+/// 사이드바에서 무엇을 보고 있는지.
+enum LibraryView { all, favorites, folder }
+
+/// 앱 전역 상태: 보기 선택(스마트/폴더), 보기 옵션(정렬·필터·검색·썸네일크기),
 /// 다중 선택, 사용자 메타데이터, 파일 작업.
 class AppState extends ChangeNotifier {
   final MetaStore meta = MetaStore();
 
   String? _root;
   List<FolderGroup> _folders = [];
+  List<PhotoItem> _allItems = [];
+  LibraryView _view = LibraryView.all;
   int _selectedFolder = 0;
   bool _loading = false;
   String? _error;
@@ -50,6 +55,28 @@ class AppState extends ChangeNotifier {
   FolderGroup? get selectedFolder =>
       _folders.isEmpty ? null : _folders[_selectedFolder.clamp(0, _folders.length - 1)];
 
+  LibraryView get view => _view;
+  bool get isFolderView => _view == LibraryView.folder;
+
+  int get allCount => _allItems.length;
+  int get favoriteCount =>
+      _allItems.where((it) => meta.get(it.path).favorite).length;
+
+  /// 현재 사이드바 선택의 표시 이름 (툴바 제목용).
+  String get viewTitle => switch (_view) {
+        LibraryView.all => '모든 사진',
+        LibraryView.favorites => '즐겨찾기',
+        LibraryView.folder => selectedFolder?.displayName ?? '',
+      };
+
+  /// 정렬/검색 전, 현재 보기의 원본 항목들.
+  List<PhotoItem> get _baseItems => switch (_view) {
+        LibraryView.all => _allItems,
+        LibraryView.favorites =>
+          _allItems.where((it) => meta.get(it.path).favorite).toList(),
+        LibraryView.folder => selectedFolder?.items ?? const [],
+      };
+
   List<PhotoItem> get visibleItems => _visible;
 
   // ── 초기화 / 스캔 ──────────────────────────────────────────
@@ -62,16 +89,20 @@ class AppState extends ChangeNotifier {
     _loading = true;
     _error = null;
     _folders = [];
+    _allItems = [];
+    _view = LibraryView.all;
     _selectedFolder = 0;
     _selection.clear();
     notifyListeners();
 
     try {
       _folders = await scanFolders(path);
+      _allItems = _folders.expand((f) => f.items).toList();
       _error = _folders.isEmpty ? '이 폴더에서 이미지를 찾지 못했습니다.' : null;
     } catch (e) {
       _error = '폴더를 읽을 수 없습니다: $e';
       _folders = [];
+      _allItems = [];
     } finally {
       _loading = false;
       _recompute();
@@ -81,6 +112,7 @@ class AppState extends ChangeNotifier {
   Future<void> _rescanKeepingFolder() async {
     final keepPath = selectedFolder?.path;
     _folders = await scanFolders(_root!);
+    _allItems = _folders.expand((f) => f.items).toList();
     if (keepPath != null) {
       final idx = _folders.indexWhere((f) => f.path == keepPath);
       _selectedFolder = idx >= 0 ? idx : 0;
@@ -89,8 +121,23 @@ class AppState extends ChangeNotifier {
     _recompute();
   }
 
+  void showAllPhotos() {
+    _view = LibraryView.all;
+    _selection.clear();
+    _anchor = null;
+    _recompute();
+  }
+
+  void showFavorites() {
+    _view = LibraryView.favorites;
+    _selection.clear();
+    _anchor = null;
+    _recompute();
+  }
+
   void selectFolder(int index) {
-    if (index < 0 || index >= _folders.length || index == _selectedFolder) return;
+    if (index < 0 || index >= _folders.length) return;
+    _view = LibraryView.folder;
     _selectedFolder = index;
     _selection.clear();
     _anchor = null;
@@ -126,7 +173,7 @@ class AppState extends ChangeNotifier {
 
   void _recompute() {
     _visible = applySortFilter(
-      selectedFolder?.items ?? const [],
+      _baseItems,
       query: _query,
       field: _sortField,
       ascending: _ascending,

@@ -7,7 +7,6 @@ import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:macos_ui/macos_ui.dart';
-import 'package:path/path.dart' as p;
 
 import 'state/app_state.dart';
 import 'widgets/control_bar.dart';
@@ -59,11 +58,11 @@ class _HomePageState extends State<HomePage> {
         await _state.openRoot(dir);
         if (Platform.environment['PHOTO_DEMO'] != null) {
           final items = _state.visibleItems;
-          if (items.length >= 3) {
+          if (items.length >= 4) {
             await _state.toggleFavorite(items[0].path);
+            await _state.toggleFavorite(items[2].path);
+            await _state.toggleFavorite(items[3].path);
             await _state.setRating(items[1].path, 4);
-            _state.selectOnly(items[2].path);
-            setState(() => _showInfo = true);
           }
         }
         final shot = Platform.environment['PHOTO_SHOT'];
@@ -136,10 +135,6 @@ class _HomePageState extends State<HomePage> {
           child: MacosWindow(
             sidebar: Sidebar(
               minWidth: 240,
-              top: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text('폴더', style: TextStyle(fontWeight: FontWeight.w600)),
-              ),
               builder: (context, scrollController) =>
                   FolderSidebar(state: _state, scrollController: scrollController),
               bottom: Padding(
@@ -156,8 +151,8 @@ class _HomePageState extends State<HomePage> {
             ),
             child: MacosScaffold(
               toolBar: ToolBar(
-                title: Text(root != null ? p.basename(root) : 'Photo Manager'),
-                titleWidth: 220,
+                title: Text(root != null ? _state.viewTitle : 'Photo Manager'),
+                titleWidth: 240,
                 actions: [
                   ToolBarIconButton(
                     label: '정보',

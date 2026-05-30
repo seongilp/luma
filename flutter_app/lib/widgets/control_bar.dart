@@ -19,26 +19,37 @@ class ControlBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasSel = state.selectedCount > 0;
     return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: MacosTheme.of(context).dividerColor),
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (hasSel) ..._actions(context) else _filterChips(),
+          if (hasSel) ..._actions(context) else _viewLabel(),
           const Spacer(),
+          _filter(),
+          const SizedBox(width: 10),
           _search(),
           const SizedBox(width: 10),
           _sort(),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
           _orderButton(),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           _thumbSlider(),
         ],
       ),
+    );
+  }
+
+  /// 비선택 시 왼쪽: 현재 보기 이름 + 장수.
+  Widget _viewLabel() {
+    return Text(
+      '${state.viewTitle}  ·  ${state.visibleItems.length}장',
+      style: const TextStyle(fontSize: 13, color: Colors.grey),
     );
   }
 
@@ -86,8 +97,8 @@ class ControlBar extends StatelessWidget {
     }
   }
 
-  // ── 필터 칩 (비선택 시) ───────────────────────────────────
-  Widget _filterChips() {
+  // ── 별점/즐겨찾기 필터 ────────────────────────────────────
+  Widget _filter() {
     return MacosPopupButton<RatingFilter>(
       value: state.ratingFilter,
       items: RatingFilter.values
