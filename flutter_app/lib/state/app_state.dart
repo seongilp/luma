@@ -6,9 +6,17 @@ import '../models/photo_meta.dart';
 import '../models/sort_filter.dart';
 import '../services/file_ops.dart';
 import '../services/similarity.dart';
+import '../services/vision_service.dart';
 
 /// 사이드바에서 무엇을 보고 있는지.
 enum LibraryView { all, favorites, similar, folder }
+
+/// 유사 사진 분석 방식.
+enum SimilarMode { ai, hash }
+
+extension SimilarModeLabel on SimilarMode {
+  String get label => this == SimilarMode.ai ? 'AI (정교)' : '해시 (빠름)';
+}
 
 /// 앱 전역 상태: 보기 선택(스마트/폴더), 보기 옵션(정렬·필터·검색·썸네일크기),
 /// 다중 선택, 사용자 메타데이터, 파일 작업.
@@ -38,6 +46,8 @@ class AppState extends ChangeNotifier {
   List<List<PhotoItem>> _similarGroups = [];
   bool _analyzing = false;
   double _analyzeProgress = 0;
+  SimilarMode _similarMode = SimilarMode.ai;
+  bool _usedFallback = false;
 
   List<PhotoItem> _visible = [];
 
@@ -73,6 +83,8 @@ class AppState extends ChangeNotifier {
       _similarGroups.fold(0, (s, g) => s + g.length);
   bool get analyzing => _analyzing;
   double get analyzeProgress => _analyzeProgress;
+  SimilarMode get similarMode => _similarMode;
+  bool get usedFallback => _usedFallback;
 
   /// 현재 사이드바 선택의 표시 이름 (툴바 제목용).
   String get viewTitle => switch (_view) {
@@ -167,19 +179,40 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// 전체 사진을 분석해 유사 묶음을 만든다 (진행률 알림).
+  void setSimilarMode(SimilarMode mode) {
+    if (mode == _similarMode) return;
+    _similarMode = mode;
+    _similarGroups = [];
+    if (_view == LibraryView.similar) {
+      analyzeSimilar();
+    } else {
+      notifyListeners();
+    }
+  }
+
+  /// 전체 사진을 분석해 유사 묶음을 만든다.
+  /// AI(Vision) 모드는 네이티브 호출, 실패 시 해시로 폴백. 해시 모드는 진행률 알림.
   Future<void> analyzeSimilar() async {
     if (_analyzing || _allItems.isEmpty) return;
     _analyzing = true;
     _analyzeProgress = 0;
+    _usedFallback = false;
     notifyListeners();
-    _similarGroups = await findSimilarGroups(
+
+    List<List<PhotoItem>>? groups;
+    if (_similarMode == SimilarMode.ai) {
+      groups = await VisionService.similarGroups(_allItems);
+      if (groups == null) _usedFallback = true; // Vision 실패 → 해시
+    }
+    groups ??= await findSimilarGroups(
       _allItems,
       onProgress: (p) {
         _analyzeProgress = p;
         notifyListeners();
       },
     );
+
+    _similarGroups = groups;
     _analyzing = false;
     _recompute();
   }

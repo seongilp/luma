@@ -15,21 +15,70 @@ class SimilarView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _modeBar(context),
+        Expanded(child: _content()),
+      ],
+    );
+  }
+
+  /// 상단: AI/해시 모드 토글 + 다시 분석.
+  Widget _modeBar(BuildContext context) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: MacosTheme.of(context).dividerColor)),
+      ),
+      child: Row(
+        children: [
+          const Text('분석 방식', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(width: 8),
+          MacosPopupButton<SimilarMode>(
+            value: state.similarMode,
+            items: SimilarMode.values
+                .map((m) => MacosPopupMenuItem(value: m, child: Text(m.label)))
+                .toList(),
+            onChanged: state.analyzing
+                ? null
+                : (m) => m == null ? null : state.setSimilarMode(m),
+          ),
+          if (state.usedFallback && !state.analyzing) ...[
+            const SizedBox(width: 10),
+            const Text('· Vision 불가 → 해시 사용',
+                style: TextStyle(fontSize: 11, color: Colors.orange)),
+          ],
+          const Spacer(),
+          PushButton(
+            controlSize: ControlSize.regular,
+            secondary: true,
+            onPressed: state.analyzing ? null : state.analyzeSimilar,
+            child: const Text('다시 분석'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _content() {
     if (state.analyzing) {
+      final ai = state.similarMode == SimilarMode.ai;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('유사한 사진을 분석하는 중…',
-                style: TextStyle(fontSize: 15)),
+            Text(ai ? 'AI가 사진을 분석하는 중…' : '유사한 사진을 분석하는 중…',
+                style: const TextStyle(fontSize: 15)),
             const SizedBox(height: 14),
-            SizedBox(
-              width: 240,
-              child: ProgressBar(value: state.analyzeProgress * 100),
-            ),
-            const SizedBox(height: 8),
-            Text('${(state.analyzeProgress * 100).round()}%',
-                style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            if (ai)
+              const ProgressCircle()
+            else ...[
+              SizedBox(width: 240, child: ProgressBar(value: state.analyzeProgress * 100)),
+              const SizedBox(height: 8),
+              Text('${(state.analyzeProgress * 100).round()}%',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            ],
           ],
         ),
       );
@@ -46,12 +95,6 @@ class SimilarView extends StatelessWidget {
             const SizedBox(height: 12),
             const Text('비슷한 사진을 찾지 못했습니다',
                 style: TextStyle(color: Colors.grey, fontSize: 15)),
-            const SizedBox(height: 16),
-            PushButton(
-              controlSize: ControlSize.large,
-              onPressed: state.analyzeSimilar,
-              child: const Text('다시 분석'),
-            ),
           ],
         ),
       );
