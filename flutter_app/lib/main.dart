@@ -202,7 +202,10 @@ class _HomePageState extends State<HomePage> {
         _state.moveCursor(-1, extend: shift);
         return KeyEventResult.handled;
       }
-      if (!isRepeat && key == LogicalKeyboardKey.space) {
+      if (!isRepeat &&
+          (key == LogicalKeyboardKey.space ||
+              key == LogicalKeyboardKey.enter ||
+              key == LogicalKeyboardKey.numpadEnter)) {
         _openPreviewAtCursor();
         return KeyEventResult.handled;
       }
