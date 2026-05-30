@@ -1,5 +1,9 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Colors, ThemeMode;
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:file_selector/file_selector.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
@@ -37,6 +41,40 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final AppState _state = AppState();
+  final GlobalKey _repaintKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    // 데모/검증용: PHOTO_DIR 환경변수가 있으면 자동으로 열고,
+    // PHOTO_SHOT 가 있으면 렌더 후 PNG로 저장하고 종료한다.
+    final dir = Platform.environment['PHOTO_DIR'];
+    if (dir != null && dir.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _state.openRoot(dir);
+        final shot = Platform.environment['PHOTO_SHOT'];
+        if (shot != null && shot.isNotEmpty) {
+          await Future.delayed(const Duration(milliseconds: 2000));
+          await _captureAndExit(shot);
+        }
+      });
+    }
+  }
+
+  Future<void> _captureAndExit(String path) async {
+    try {
+      final boundary =
+          _repaintKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary != null) {
+        final image = await boundary.toImage(pixelRatio: 2.0);
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (data != null) {
+          await File(path).writeAsBytes(data.buffer.asUint8List());
+        }
+      }
+    } catch (_) {}
+    exit(0);
+  }
 
   @override
   void dispose() {
@@ -57,7 +95,9 @@ class _HomePageState extends State<HomePage> {
       listenable: _state,
       builder: (context, _) {
         final root = _state.root;
-        return MacosWindow(
+        return RepaintBoundary(
+          key: _repaintKey,
+          child: MacosWindow(
           sidebar: Sidebar(
             minWidth: 240,
             top: const Padding(
@@ -99,6 +139,7 @@ class _HomePageState extends State<HomePage> {
                 builder: (context, scrollController) => _buildContent(),
               ),
             ],
+          ),
           ),
         );
       },
