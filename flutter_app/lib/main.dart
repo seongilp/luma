@@ -82,6 +82,11 @@ class _HomePageState extends State<HomePage> {
           await _state.estimateLocations();
           await Future.delayed(const Duration(seconds: 4)); // 지도 타일 로드 대기
         }
+        if (Platform.environment['PHOTO_CLAUDE'] != null) {
+          await _state.showMap();
+          await _state.estimateLocationsWithClaude();
+          await Future.delayed(const Duration(seconds: 4)); // 지도 타일 로드 대기
+        }
         final shot = Platform.environment['PHOTO_SHOT'];
         if (shot != null && shot.isNotEmpty) {
           await Future.delayed(const Duration(milliseconds: 2200));

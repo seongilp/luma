@@ -7,6 +7,7 @@ import 'package:macos_ui/macos_ui.dart';
 
 import '../state/app_state.dart';
 import 'analysis_overlay.dart';
+import 'dialogs.dart';
 import 'photo_viewer.dart';
 
 /// 지도 보기: EXIF GPS가 있는 사진은 실제 위치에, 유사 사진으로 추정한 위치는
@@ -44,17 +45,43 @@ class MapView extends StatelessWidget {
       child: Row(
         children: [
           _legend(Colors.blue, 'GPS ${state.realLocationCount}'),
-          const SizedBox(width: 14),
-          _legend(Colors.orange, '추정 ${state.estimatedLocationCount}'),
+          const SizedBox(width: 12),
+          _legend(Colors.orange, '내용추정 ${state.estimatedLocationCount}'),
+          if (state.claudeLocationCount > 0) ...[
+            const SizedBox(width: 12),
+            _legend(Colors.purpleAccent, 'Claude ${state.claudeLocationCount}'),
+          ],
           const Spacer(),
           PushButton(
             controlSize: ControlSize.regular,
+            secondary: true,
             onPressed: state.estimateLocations,
-            child: const Text('사진 내용으로 위치 추정'),
+            child: const Text('사진 내용으로 추정'),
           ),
+          if (state.claudeConfigured) ...[
+            const SizedBox(width: 8),
+            PushButton(
+              controlSize: ControlSize.regular,
+              onPressed:
+                  state.unlocatedCount > 0 ? () => _runClaude(context) : null,
+              child: Text('Claude로 위치 찾기 (${state.unlocatedCount})'),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _runClaude(BuildContext context) async {
+    final n = state.unlocatedCount;
+    final ok = await confirm(
+      context,
+      title: 'Claude로 위치 찾기',
+      message: '위치 없는 사진 $n장을 Claude(클라우드)로 보내 촬영 장소를 추정합니다.\n'
+          '사진이 외부(Anthropic 게이트웨이)로 전송됩니다.',
+      confirmLabel: '추정 시작',
+    );
+    if (ok) await state.estimateLocationsWithClaude();
   }
 
   Widget _legend(Color color, String label) {
@@ -102,7 +129,7 @@ class MapView extends StatelessWidget {
                 height: 54,
                 child: _PinThumb(
                   path: lp.path,
-                  estimated: lp.estimated,
+                  kind: lp.kind,
                   onTap: () => _open(context, located, lp.path),
                 ),
               ),
@@ -129,13 +156,17 @@ class MapView extends StatelessWidget {
 
 class _PinThumb extends StatelessWidget {
   final String path;
-  final bool estimated;
+  final LocationKind kind;
   final VoidCallback onTap;
-  const _PinThumb({required this.path, required this.estimated, required this.onTap});
+  const _PinThumb({required this.path, required this.kind, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final color = estimated ? Colors.orange : Colors.blue;
+    final color = switch (kind) {
+      LocationKind.gps => Colors.blue,
+      LocationKind.content => Colors.orange,
+      LocationKind.claude => Colors.purpleAccent,
+    };
     return GestureDetector(
       onTap: onTap,
       child: Container(

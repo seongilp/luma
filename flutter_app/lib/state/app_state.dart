@@ -5,6 +5,7 @@ import '../models/folder_group.dart';
 import '../models/photo_item.dart';
 import '../models/photo_meta.dart';
 import '../models/sort_filter.dart';
+import '../services/claude_service.dart';
 import '../services/file_ops.dart';
 import '../services/geo.dart';
 import '../services/similarity.dart';
@@ -17,8 +18,11 @@ const double _kSimilarThreshold = 0.6;
 /// 내용 기반 위치추정: 이 거리 안에 GPS 사진이 있으면 같은 장소로 본다.
 const double _kLocationThreshold = 0.9;
 
+/// 위치 출처: 실제 GPS / 사진내용(Vision 매칭) / Claude(클라우드).
+enum LocationKind { gps, content, claude }
+
 /// 지도에 표시할 위치가 있는 사진 한 장.
-typedef LocatedPhoto = ({String path, LatLng pos, bool estimated});
+typedef LocatedPhoto = ({String path, LatLng pos, LocationKind kind});
 
 /// 사이드바에서 무엇을 보고 있는지.
 enum LibraryView { all, favorites, similar, map, folder }
@@ -71,9 +75,12 @@ class AppState extends ChangeNotifier {
 
   // 위치/지도
   final Map<String, LatLng> _geo = {}; // EXIF GPS (실제)
-  final Map<String, LatLng> _estimatedGeo = {}; // 유사 사진으로 추정
+  final Map<String, LatLng> _estimatedGeo = {}; // 사진내용(Vision)으로 추정
+  final Map<String, LatLng> _claudeGeo = {}; // Claude(클라우드)로 추정
+  final Map<String, String> _claudePlace = {}; // Claude가 본 장소명
   bool _geoLoading = false;
   double _geoProgress = 0;
+  late final ClaudeService _claude = ClaudeService(ClaudeConfig.fromEnv());
 
   List<PhotoItem> _visible = [];
 
@@ -123,18 +130,35 @@ class AppState extends ChangeNotifier {
   double get geoProgress => _geoProgress;
   int get realLocationCount => _geo.length;
   int get estimatedLocationCount => _estimatedGeo.length;
+  int get claudeLocationCount => _claudeGeo.length;
+  bool get claudeConfigured => _claude.config.isConfigured;
 
-  /// 지도에 찍을 사진들(실제 GPS + 추정).
+  String? claudePlaceFor(String path) => _claudePlace[path];
+
+  /// 아직 위치가 전혀 없는(=Claude 후보) 사진 수.
+  int get unlocatedCount => _allItems
+      .where((it) =>
+          !_geo.containsKey(it.path) &&
+          !_estimatedGeo.containsKey(it.path) &&
+          !_claudeGeo.containsKey(it.path))
+      .length;
+
+  /// 지도에 찍을 사진들. 우선순위: 실제 GPS > 사진내용 추정 > Claude 추정.
   List<LocatedPhoto> get locatedPhotos {
     final out = <LocatedPhoto>[];
     for (final it in _allItems) {
       final real = _geo[it.path];
       if (real != null) {
-        out.add((path: it.path, pos: real, estimated: false));
+        out.add((path: it.path, pos: real, kind: LocationKind.gps));
         continue;
       }
       final est = _estimatedGeo[it.path];
-      if (est != null) out.add((path: it.path, pos: est, estimated: true));
+      if (est != null) {
+        out.add((path: it.path, pos: est, kind: LocationKind.content));
+        continue;
+      }
+      final cl = _claudeGeo[it.path];
+      if (cl != null) out.add((path: it.path, pos: cl, kind: LocationKind.claude));
     }
     return out;
   }
@@ -175,6 +199,8 @@ class AppState extends ChangeNotifier {
     _vectors.clear();
     _geo.clear();
     _estimatedGeo.clear();
+    _claudeGeo.clear();
+    _claudePlace.clear();
     _view = LibraryView.all;
     _selectedFolder = 0;
     _selection.clear();
@@ -202,6 +228,8 @@ class AppState extends ChangeNotifier {
     _vectors.clear();
     _geo.clear();
     _estimatedGeo.clear();
+    _claudeGeo.clear();
+    _claudePlace.clear();
     if (keepPath != null) {
       final idx = _folders.indexWhere((f) => f.path == keepPath);
       _selectedFolder = idx >= 0 ? idx : 0;
@@ -279,6 +307,8 @@ class AppState extends ChangeNotifier {
 
     final ok = await _ensureVectors('위치 분석 (사진 내용)');
     _estimatedGeo.clear();
+    _claudeGeo.clear();
+    _claudePlace.clear();
 
     if (ok) {
       final refs = [
@@ -320,6 +350,34 @@ class AppState extends ChangeNotifier {
       }
     }
 
+    _analyzing = false;
+    _clearProgress();
+    notifyListeners();
+  }
+
+  /// Claude(클라우드)로, 아직 위치 없는 사진의 촬영 장소를 추정한다.
+  /// 사진을 Anthropic(게이트웨이)로 보낸다 — 호출 전 사용자 동의 필요.
+  Future<void> estimateLocationsWithClaude() async {
+    if (_analyzing || !claudeConfigured) return;
+    final targets = [
+      for (final it in _allItems)
+        if (!_geo.containsKey(it.path) &&
+            !_estimatedGeo.containsKey(it.path) &&
+            !_claudeGeo.containsKey(it.path))
+          it
+    ];
+    if (targets.isEmpty) return;
+
+    _analyzing = true;
+    notifyListeners();
+    for (var i = 0; i < targets.length; i++) {
+      _setProgress('위치 분석 (Claude)', i + 1, targets.length, targets[i].path);
+      final loc = await _claude.identifyLocation(targets[i].path);
+      if (loc != null && loc.hasCoords && loc.confidence >= 0.3) {
+        _claudeGeo[targets[i].path] = LatLng(loc.lat!, loc.lng!);
+        if (loc.place != null) _claudePlace[targets[i].path] = loc.place!;
+      }
+    }
     _analyzing = false;
     _clearProgress();
     notifyListeners();
