@@ -197,11 +197,9 @@ enum MetaBridge {
   }
 
   static func setTags(path: String, tags: [String]) -> Bool {
-    var url = URL(fileURLWithPath: path)
-    var values = URLResourceValues()
-    values.tagNames = tags
+    // NSURL 키 기반 API는 전 버전 호환.
     do {
-      try url.setResourceValues(values)
+      try (URL(fileURLWithPath: path) as NSURL).setResourceValue(tags, forKey: .tagNamesKey)
       return true
     } catch {
       return false
