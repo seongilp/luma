@@ -1,15 +1,20 @@
 import 'package:flutter/foundation.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../models/folder_group.dart';
 import '../models/photo_item.dart';
 import '../models/photo_meta.dart';
 import '../models/sort_filter.dart';
 import '../services/file_ops.dart';
+import '../services/geo.dart';
 import '../services/similarity.dart';
 import '../services/vision_service.dart';
 
+/// 지도에 표시할 위치가 있는 사진 한 장.
+typedef LocatedPhoto = ({String path, LatLng pos, bool estimated});
+
 /// 사이드바에서 무엇을 보고 있는지.
-enum LibraryView { all, favorites, similar, folder }
+enum LibraryView { all, favorites, similar, map, folder }
 
 /// 유사 사진 분석 방식.
 enum SimilarMode { ai, hash }
@@ -49,6 +54,12 @@ class AppState extends ChangeNotifier {
   SimilarMode _similarMode = SimilarMode.ai;
   bool _usedFallback = false;
 
+  // 위치/지도
+  final Map<String, LatLng> _geo = {}; // EXIF GPS (실제)
+  final Map<String, LatLng> _estimatedGeo = {}; // 유사 사진으로 추정
+  bool _geoLoading = false;
+  double _geoProgress = 0;
+
   List<PhotoItem> _visible = [];
 
   // ── getters ────────────────────────────────────────────────
@@ -86,11 +97,32 @@ class AppState extends ChangeNotifier {
   SimilarMode get similarMode => _similarMode;
   bool get usedFallback => _usedFallback;
 
+  bool get geoLoading => _geoLoading;
+  double get geoProgress => _geoProgress;
+  int get realLocationCount => _geo.length;
+  int get estimatedLocationCount => _estimatedGeo.length;
+
+  /// 지도에 찍을 사진들(실제 GPS + 추정).
+  List<LocatedPhoto> get locatedPhotos {
+    final out = <LocatedPhoto>[];
+    for (final it in _allItems) {
+      final real = _geo[it.path];
+      if (real != null) {
+        out.add((path: it.path, pos: real, estimated: false));
+        continue;
+      }
+      final est = _estimatedGeo[it.path];
+      if (est != null) out.add((path: it.path, pos: est, estimated: true));
+    }
+    return out;
+  }
+
   /// 현재 사이드바 선택의 표시 이름 (툴바 제목용).
   String get viewTitle => switch (_view) {
         LibraryView.all => '모든 사진',
         LibraryView.favorites => '즐겨찾기',
         LibraryView.similar => '유사 사진',
+        LibraryView.map => '지도',
         LibraryView.folder => selectedFolder?.displayName ?? '',
       };
 
@@ -100,6 +132,7 @@ class AppState extends ChangeNotifier {
         LibraryView.favorites =>
           _allItems.where((it) => meta.get(it.path).favorite).toList(),
         LibraryView.similar => _similarGroups.expand((g) => g).toList(),
+        LibraryView.map => const [],
         LibraryView.folder => selectedFolder?.items ?? const [],
       };
 
@@ -117,6 +150,8 @@ class AppState extends ChangeNotifier {
     _folders = [];
     _allItems = [];
     _similarGroups = [];
+    _geo.clear();
+    _estimatedGeo.clear();
     _view = LibraryView.all;
     _selectedFolder = 0;
     _selection.clear();
@@ -141,6 +176,8 @@ class AppState extends ChangeNotifier {
     _folders = await scanFolders(_root!);
     _allItems = _folders.expand((f) => f.items).toList();
     _similarGroups = []; // 파일이 바뀌었으니 무효화
+    _geo.clear();
+    _estimatedGeo.clear();
     if (keepPath != null) {
       final idx = _folders.indexWhere((f) => f.path == keepPath);
       _selectedFolder = idx >= 0 ? idx : 0;
@@ -177,6 +214,59 @@ class AppState extends ChangeNotifier {
     } else {
       _recompute();
     }
+  }
+
+  Future<void> showMap() async {
+    _view = LibraryView.map;
+    _selection.clear();
+    _anchor = null;
+    notifyListeners();
+    if (_geo.isEmpty && _estimatedGeo.isEmpty && !_geoLoading) {
+      await loadGeo();
+    }
+  }
+
+  /// 모든 사진의 EXIF GPS를 읽어 위치를 모은다 (진행률 알림).
+  Future<void> loadGeo() async {
+    if (_geoLoading || _allItems.isEmpty) return;
+    _geoLoading = true;
+    _geoProgress = 0;
+    _geo.clear();
+    notifyListeners();
+    for (var i = 0; i < _allItems.length; i++) {
+      final pos = await readGps(_allItems[i].path);
+      if (pos != null) _geo[_allItems[i].path] = pos;
+      if (i % 8 == 0 || i == _allItems.length - 1) {
+        _geoProgress = (i + 1) / _allItems.length;
+        notifyListeners();
+      }
+    }
+    _geoLoading = false;
+    notifyListeners();
+  }
+
+  /// ④ 유사 사진 묶음을 이용해, GPS 없는 사진에 같은 묶음의 GPS를 전파(추정).
+  Future<void> propagateLocations() async {
+    if (_similarGroups.isEmpty) {
+      await analyzeSimilar();
+    }
+    _estimatedGeo.clear();
+    for (final group in _similarGroups) {
+      // 묶음 안에서 실제 GPS가 있는 대표 위치를 찾는다.
+      LatLng? anchor;
+      for (final it in group) {
+        final g = _geo[it.path];
+        if (g != null) {
+          anchor = g;
+          break;
+        }
+      }
+      if (anchor == null) continue;
+      for (final it in group) {
+        if (!_geo.containsKey(it.path)) _estimatedGeo[it.path] = anchor;
+      }
+    }
+    notifyListeners();
   }
 
   void setSimilarMode(SimilarMode mode) {

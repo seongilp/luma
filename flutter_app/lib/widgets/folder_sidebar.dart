@@ -53,6 +53,15 @@ class FolderSidebar extends StatelessWidget {
           selected: state.view == LibraryView.similar,
           onTap: state.showSimilar,
         ),
+        _SidebarRow(
+          icon: CupertinoIcons.map,
+          iconColor: Colors.blue,
+          label: '지도',
+          count: state.realLocationCount + state.estimatedLocationCount,
+          showCount: state.realLocationCount + state.estimatedLocationCount > 0,
+          selected: state.view == LibraryView.map,
+          onTap: state.showMap,
+        ),
         const SizedBox(height: 6),
         const _SectionHeader('폴더'),
         if (state.folders.isEmpty)

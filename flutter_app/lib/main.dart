@@ -13,6 +13,7 @@ import 'widgets/control_bar.dart';
 import 'widgets/dialogs.dart';
 import 'widgets/folder_sidebar.dart';
 import 'widgets/info_panel.dart';
+import 'widgets/map_view.dart';
 import 'widgets/photo_grid.dart';
 import 'widgets/similar_view.dart';
 
@@ -68,6 +69,11 @@ class _HomePageState extends State<HomePage> {
         }
         if (Platform.environment['PHOTO_SIMILAR'] != null) {
           await _state.showSimilar();
+        }
+        if (Platform.environment['PHOTO_MAP'] != null) {
+          await _state.showMap();
+          await _state.propagateLocations();
+          await Future.delayed(const Duration(seconds: 4)); // 지도 타일 로드 대기
         }
         final shot = Platform.environment['PHOTO_SHOT'];
         if (shot != null && shot.isNotEmpty) {
@@ -210,21 +216,20 @@ class _HomePageState extends State<HomePage> {
     }
 
     final infoPath = _state.selectedCount == 1 ? _state.selection.first : null;
+    final isGrid = _state.view == LibraryView.all ||
+        _state.view == LibraryView.favorites ||
+        _state.view == LibraryView.folder;
     return Focus(
       focusNode: _keyboardFocus,
       autofocus: true,
       onKeyEvent: _onKey,
       child: Column(
         children: [
-          ControlBar(state: _state),
+          if (isGrid) ControlBar(state: _state),
           Expanded(
             child: Row(
               children: [
-                Expanded(
-                  child: _state.view == LibraryView.similar
-                      ? SimilarView(state: _state)
-                      : PhotoGrid(state: _state),
-                ),
+                Expanded(child: _mainContent()),
                 if (_showInfo) InfoPanel(path: infoPath),
               ],
             ),
@@ -232,6 +237,17 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+
+  Widget _mainContent() {
+    switch (_state.view) {
+      case LibraryView.similar:
+        return SimilarView(state: _state);
+      case LibraryView.map:
+        return MapView(state: _state);
+      default:
+        return PhotoGrid(state: _state);
+    }
   }
 }
 
