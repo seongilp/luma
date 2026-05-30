@@ -49,6 +49,21 @@ class _PhotoViewerState extends State<PhotoViewer> {
     }
   }
 
+  bool _flash = false;
+
+  /// 빠른 리뷰: 현재 사진을 즐겨찾기(이미 즐겨찾기면 유지)하고 다음으로.
+  void _favoriteAndNext() {
+    final path = widget.paths[_index];
+    if (!widget.state.meta.get(path).favorite) {
+      widget.state.toggleFavorite(path);
+    }
+    setState(() => _flash = true);
+    Future.delayed(const Duration(milliseconds: 420), () {
+      if (mounted) setState(() => _flash = false);
+    });
+    _move(1);
+  }
+
   Future<void> _deleteCurrent() async {
     final path = widget.paths[_index];
     await widget.state.deleteOne(path);
@@ -69,6 +84,10 @@ class _PhotoViewerState extends State<PhotoViewer> {
         return KeyEventResult.handled;
       case LogicalKeyboardKey.keyF:
         widget.state.toggleFavorite(widget.paths[_index]);
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.space:
+        // 빠른 리뷰: 즐겨찾기 표시 후 다음 사진으로.
+        _favoriteAndNext();
         return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -108,13 +127,24 @@ class _PhotoViewerState extends State<PhotoViewer> {
                   color: Colors.black.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text('${_index + 1} / ${widget.paths.length}',
-                    style: const TextStyle(color: Colors.white, fontSize: 14)),
+                child: Text('${_index + 1} / ${widget.paths.length}   ·   Space: ♥ + 다음',
+                    style: const TextStyle(color: Colors.white, fontSize: 13)),
               ),
             ),
           ),
           _NavButton(alignment: Alignment.centerLeft, icon: Icons.chevron_left, onTap: () => _move(-1)),
           _NavButton(alignment: Alignment.centerRight, icon: Icons.chevron_right, onTap: () => _move(1)),
+          // 빠른 리뷰 하트 플래시
+          IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: _flash ? 1 : 0,
+              duration: const Duration(milliseconds: 150),
+              child: Center(
+                child: Icon(CupertinoIcons.heart_fill,
+                    color: Colors.redAccent.withValues(alpha: 0.9), size: 130),
+              ),
+            ),
+          ),
           _bottomBar(),
         ],
       ),
