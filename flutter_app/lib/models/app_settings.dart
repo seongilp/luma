@@ -12,11 +12,15 @@ class AppSettings {
   /// Claude 위치 추정 1회 실행에서 최대 호출(=장소 묶음) 수.
   int claudeMaxCalls;
 
+  /// 마지막으로 연 폴더 (다음 실행 시 자동 열기).
+  String lastRoot;
+
   AppSettings({
     this.anthropicApiKey = '',
     this.anthropicBaseUrl = '',
     this.cfToken = '',
     this.claudeMaxCalls = 50,
+    this.lastRoot = '',
   });
 
   AppSettings copyWith({
@@ -24,12 +28,14 @@ class AppSettings {
     String? anthropicBaseUrl,
     String? cfToken,
     int? claudeMaxCalls,
+    String? lastRoot,
   }) =>
       AppSettings(
         anthropicApiKey: anthropicApiKey ?? this.anthropicApiKey,
         anthropicBaseUrl: anthropicBaseUrl ?? this.anthropicBaseUrl,
         cfToken: cfToken ?? this.cfToken,
         claudeMaxCalls: claudeMaxCalls ?? this.claudeMaxCalls,
+        lastRoot: lastRoot ?? this.lastRoot,
       );
 
   Map<String, dynamic> toJson() => {
@@ -37,6 +43,7 @@ class AppSettings {
         'anthropicBaseUrl': anthropicBaseUrl,
         'cfToken': cfToken,
         'claudeMaxCalls': claudeMaxCalls,
+        'lastRoot': lastRoot,
       };
 
   static AppSettings fromJson(Map<String, dynamic> j) => AppSettings(
@@ -44,6 +51,7 @@ class AppSettings {
         anthropicBaseUrl: j['anthropicBaseUrl'] as String? ?? '',
         cfToken: j['cfToken'] as String? ?? '',
         claudeMaxCalls: (j['claudeMaxCalls'] as num?)?.toInt() ?? 50,
+        lastRoot: j['lastRoot'] as String? ?? '',
       );
 }
 

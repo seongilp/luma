@@ -58,10 +58,20 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _state.init();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _boot());
+  }
+
+  Future<void> _boot() async {
+    await _state.init();
     final dir = Platform.environment['PHOTO_DIR'];
-    if (dir != null && dir.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
+    if (dir == null || dir.isEmpty) {
+      // 환경변수 없으면 마지막으로 연 폴더 자동 열기
+      final last = _state.settings.lastRoot;
+      if (last.isNotEmpty) await _state.openRoot(last);
+      return;
+    }
+    {
+      {
         await _state.openRoot(dir);
         if (Platform.environment['PHOTO_DEMO'] != null) {
           final items = _state.visibleItems;
@@ -109,7 +119,7 @@ class _HomePageState extends State<HomePage> {
           await Future.delayed(const Duration(milliseconds: 2200));
           await _captureAndExit(shot);
         }
-      });
+      }
     }
   }
 

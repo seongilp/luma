@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/app_settings.dart';
 import '../models/folder_group.dart';
+import '../services/analysis_cache.dart';
 import '../models/photo_item.dart';
 import '../models/photo_meta.dart';
 import '../models/sort_filter.dart';
@@ -51,6 +52,7 @@ extension SimilarModeLabel on SimilarMode {
 /// 다중 선택, 사용자 메타데이터, 파일 작업.
 class AppState extends ChangeNotifier {
   final MetaStore meta = MetaStore();
+  final AnalysisCache _cache = AnalysisCache();
 
   String? _root;
   List<FolderGroup> _folders = [];
@@ -172,12 +174,16 @@ class AppState extends ChangeNotifier {
 
   String? claudePlaceFor(String path) => _claudePlace[path];
 
-  /// 아직 위치가 전혀 없는(=Claude 후보) 사진 수.
+  bool _claudeTried(PhotoItem it) =>
+      _cache.peek(it.path, it.modified.millisecondsSinceEpoch, it.sizeBytes)?.claudeChecked ?? false;
+
+  /// 아직 위치가 없고 Claude도 안 시도한(=Claude 후보) 사진 수.
   int get unlocatedCount => _allItems
       .where((it) =>
           !_geo.containsKey(it.path) &&
           !_estimatedGeo.containsKey(it.path) &&
-          !_claudeGeo.containsKey(it.path))
+          !_claudeGeo.containsKey(it.path) &&
+          !_claudeTried(it))
       .length;
 
   /// 지도에 찍을 사진들. 우선순위: 실제 GPS > 사진내용 추정 > Claude 추정.
@@ -289,8 +295,32 @@ class AppState extends ChangeNotifier {
   Future<void> init() async {
     _settings = await _settingsStore.load();
     await meta.load();
+    await _cache.load();
     notifyListeners();
   }
+
+  /// 캐시에서 분석 결과를 미리 채운다 (재계산·재과금 방지).
+  void _hydrateFromCache() {
+    for (final it in _allItems) {
+      final e = _cache.peek(it.path, it.modified.millisecondsSinceEpoch, it.sizeBytes);
+      if (e == null) continue;
+      if (e.vector != null) _vectors[it.path] = e.vector!;
+      if (e.gpsChecked && e.lat != null && e.lng != null) {
+        _geo[it.path] = LatLng(e.lat!, e.lng!);
+      }
+      if (e.takenChecked && e.taken != null) {
+        final d = DateTime.tryParse(e.taken!);
+        if (d != null) _dates[it.path] = d;
+      }
+      if (e.claudeChecked && e.claudeLat != null && e.claudeLng != null) {
+        _claudeGeo[it.path] = LatLng(e.claudeLat!, e.claudeLng!);
+        if (e.claudePlace != null) _claudePlace[it.path] = e.claudePlace!;
+      }
+    }
+  }
+
+  CacheEntry _entry(PhotoItem it) =>
+      _cache.entryFor(it.path, it.modified.millisecondsSinceEpoch, it.sizeBytes);
 
   Future<void> openRoot(String path) async {
     _root = path;
@@ -316,7 +346,12 @@ class AppState extends ChangeNotifier {
     try {
       _folders = await scanFolders(path);
       _allItems = _folders.expand((f) => f.items).toList();
+      _hydrateFromCache(); // 이전 분석 결과 복원
       _error = _folders.isEmpty ? '이 폴더에서 이미지를 찾지 못했습니다.' : null;
+      if (_folders.isNotEmpty) {
+        _settings = _settings.copyWith(lastRoot: path);
+        _settingsStore.save(_settings); // 마지막 폴더 기억
+      }
     } catch (e) {
       _error = '폴더를 읽을 수 없습니다: $e';
       _folders = [];
@@ -394,9 +429,21 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     for (var i = 0; i < _allItems.length; i++) {
       _setProgress('날짜 읽는 중', i + 1, _allItems.length, _allItems[i].path);
-      final d = await readTakenDate(_allItems[i].path);
-      _dates[_allItems[i].path] = d ?? _allItems[i].modified;
+      final it = _allItems[i];
+      final e = _entry(it);
+      if (e.takenChecked) {
+        if (e.taken != null) {
+          _dates[it.path] = DateTime.tryParse(e.taken!) ?? it.modified;
+        }
+      } else {
+        final d = await readTakenDate(it.path);
+        e.takenChecked = true;
+        e.taken = d?.toIso8601String();
+        if (d != null) _dates[it.path] = d;
+        _cache.markDirty();
+      }
     }
+    await _cache.save();
     _datesLoaded = true;
     _analyzing = false;
     _clearProgress();
@@ -429,12 +476,23 @@ class AppState extends ChangeNotifier {
     final facePhoto = <PhotoItem>[];
     for (var i = 0; i < _allItems.length; i++) {
       _setProgress('인물(얼굴) 인식', i + 1, _allItems.length, _allItems[i].path);
-      final faces = await VisionService.faces(_allItems[i].path);
-      for (final f in faces) {
-        faceVecs.add(f.vector);
-        facePhoto.add(_allItems[i]);
+      final it = _allItems[i];
+      final e = _entry(it);
+      List<List<double>> faces;
+      if (e.faces != null) {
+        faces = e.faces!; // 캐시
+      } else {
+        final detected = await VisionService.faces(it.path);
+        faces = [for (final f in detected) f.vector];
+        e.faces = faces;
+        _cache.markDirty();
+      }
+      for (final v in faces) {
+        faceVecs.add(v);
+        facePhoto.add(it);
       }
     }
+    await _cache.save();
 
     // 얼굴 벡터 클러스터링 → 사람별 사진 묶음(사진 중복 제거)
     final parts = partitionByDistance(faceVecs, _kFaceThreshold);
@@ -476,10 +534,23 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     for (var i = 0; i < _allItems.length; i++) {
       _setProgress('위치(GPS) 읽는 중', i + 1, _allItems.length, _allItems[i].path);
-      final pos = await readGps(_allItems[i].path);
-      if (pos != null) _geo[_allItems[i].path] = pos;
+      final it = _allItems[i];
+      final e = _entry(it);
+      if (e.gpsChecked) {
+        if (e.lat != null && e.lng != null) _geo[it.path] = LatLng(e.lat!, e.lng!);
+      } else {
+        final pos = await readGps(it.path);
+        e.gpsChecked = true;
+        if (pos != null) {
+          e.lat = pos.latitude;
+          e.lng = pos.longitude;
+          _geo[it.path] = pos;
+        }
+        _cache.markDirty();
+      }
       _geoProgress = (i + 1) / _allItems.length;
     }
+    await _cache.save();
     _geoLoading = false;
     _clearProgress();
     notifyListeners();
@@ -552,7 +623,8 @@ class AppState extends ChangeNotifier {
       for (final it in _allItems)
         if (!_geo.containsKey(it.path) &&
             !_estimatedGeo.containsKey(it.path) &&
-            !_claudeGeo.containsKey(it.path))
+            !_claudeGeo.containsKey(it.path) &&
+            !_claudeTried(it))
           it
     ];
     if (targets.isEmpty) return [];
@@ -580,14 +652,25 @@ class AppState extends ChangeNotifier {
       final rep = groups[i].first;
       _setProgress('위치 분석 (Claude)', i + 1, groups.length, rep.path);
       final loc = await _claude.identifyLocation(rep.path);
-      if (loc != null && loc.hasCoords && loc.confidence >= 0.3) {
-        final pos = LatLng(loc.lat!, loc.lng!);
-        for (final member in groups[i]) {
+      final ok = loc != null && loc.hasCoords && loc.confidence >= 0.3;
+      final pos = ok ? LatLng(loc.lat!, loc.lng!) : null;
+      // 결과를 묶음 전체에 전파 + 캐시(시도 표시 → 재호출/재과금 방지)
+      for (final member in groups[i]) {
+        final e = _entry(member);
+        e.claudeChecked = true;
+        if (pos != null) {
           _claudeGeo[member.path] = pos;
-          if (loc.place != null) _claudePlace[member.path] = loc.place!;
+          e.claudeLat = pos.latitude;
+          e.claudeLng = pos.longitude;
+          if (loc!.place != null) {
+            _claudePlace[member.path] = loc.place!;
+            e.claudePlace = loc.place;
+          }
         }
+        _cache.markDirty();
       }
     }
+    await _cache.save();
 
     _analyzing = false;
     _clearProgress();
@@ -622,6 +705,7 @@ class AppState extends ChangeNotifier {
 
   /// 모든 사진의 Vision 특징벡터를 확보해 캐시한다. Vision 자체가 안 되면 false.
   Future<bool> _ensureVectors(String phase) async {
+    // 캐시(hydrate)로 이미 채워진 사진은 _vectors에 있으므로 자동 제외.
     final todo = [for (final it in _allItems) if (!_vectors.containsKey(it.path)) it];
     if (todo.isEmpty) return _vectors.isNotEmpty;
     for (var i = 0; i < todo.length; i++) {
@@ -632,7 +716,10 @@ class AppState extends ChangeNotifier {
         continue;
       }
       _vectors[todo[i].path] = v;
+      _entry(todo[i]).vector = v; // 캐시에 저장
+      _cache.markDirty();
     }
+    await _cache.save();
     return true;
   }
 
