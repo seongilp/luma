@@ -37,6 +37,8 @@ dependencies:
   macos_ui: ^2.2.2
   file_selector: ^1.1.0
   path: ^1.9.1
+  exif: ^3.3.0
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:

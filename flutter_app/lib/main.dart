@@ -4,12 +4,16 @@ import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Colors, ThemeMode;
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
+import 'package:flutter/services.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
 
 import 'state/app_state.dart';
+import 'widgets/control_bar.dart';
+import 'widgets/dialogs.dart';
 import 'widgets/folder_sidebar.dart';
+import 'widgets/info_panel.dart';
 import 'widgets/photo_grid.dart';
 
 void main() {
@@ -42,23 +46,70 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final AppState _state = AppState();
   final GlobalKey _repaintKey = GlobalKey();
+  final FocusNode _keyboardFocus = FocusNode();
+  bool _showInfo = false;
 
   @override
   void initState() {
     super.initState();
-    // 데모/검증용: PHOTO_DIR 환경변수가 있으면 자동으로 열고,
-    // PHOTO_SHOT 가 있으면 렌더 후 PNG로 저장하고 종료한다.
+    _state.init();
     final dir = Platform.environment['PHOTO_DIR'];
     if (dir != null && dir.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await _state.openRoot(dir);
+        if (Platform.environment['PHOTO_DEMO'] != null) {
+          final items = _state.visibleItems;
+          if (items.length >= 3) {
+            await _state.toggleFavorite(items[0].path);
+            await _state.setRating(items[1].path, 4);
+            _state.selectOnly(items[2].path);
+            setState(() => _showInfo = true);
+          }
+        }
         final shot = Platform.environment['PHOTO_SHOT'];
         if (shot != null && shot.isNotEmpty) {
-          await Future.delayed(const Duration(milliseconds: 2000));
+          await Future.delayed(const Duration(milliseconds: 2200));
           await _captureAndExit(shot);
         }
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _state.dispose();
+    _keyboardFocus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openFolder() async {
+    final dir = await getDirectoryPath(confirmButtonText: '선택');
+    if (dir != null) await _state.openRoot(dir);
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (HardwareKeyboard.instance.isMetaPressed && key == LogicalKeyboardKey.keyA) {
+      _state.selectAll();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      _state.clearSelection();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.delete || key == LogicalKeyboardKey.backspace) {
+      if (_state.selectedCount > 0) _confirmDelete();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  Future<void> _confirmDelete() async {
+    final n = _state.selectedCount;
+    final ok = await confirm(context,
+        title: '휴지통으로 이동', message: '$n개의 사진을 휴지통으로 보낼까요?');
+    if (ok) await _state.deleteSelected();
   }
 
   Future<void> _captureAndExit(String path) async {
@@ -68,25 +119,10 @@ class _HomePageState extends State<HomePage> {
       if (boundary != null) {
         final image = await boundary.toImage(pixelRatio: 2.0);
         final data = await image.toByteData(format: ui.ImageByteFormat.png);
-        if (data != null) {
-          await File(path).writeAsBytes(data.buffer.asUint8List());
-        }
+        if (data != null) await File(path).writeAsBytes(data.buffer.asUint8List());
       }
     } catch (_) {}
     exit(0);
-  }
-
-  @override
-  void dispose() {
-    _state.dispose();
-    super.dispose();
-  }
-
-  Future<void> _openFolder() async {
-    final dir = await getDirectoryPath(confirmButtonText: '선택');
-    if (dir != null) {
-      await _state.openRoot(dir);
-    }
   }
 
   @override
@@ -98,71 +134,88 @@ class _HomePageState extends State<HomePage> {
         return RepaintBoundary(
           key: _repaintKey,
           child: MacosWindow(
-          sidebar: Sidebar(
-            minWidth: 240,
-            top: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('폴더', style: TextStyle(fontWeight: FontWeight.w600)),
-            ),
-            builder: (context, scrollController) => FolderSidebar(
-              state: _state,
-              scrollController: scrollController,
-            ),
-            bottom: Padding(
-              padding: const EdgeInsets.all(8),
-              child: SizedBox(
-                width: double.infinity,
-                child: PushButton(
-                  controlSize: ControlSize.large,
-                  onPressed: _openFolder,
-                  child: const Text('폴더 열기'),
+            sidebar: Sidebar(
+              minWidth: 240,
+              top: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('폴더', style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
+              builder: (context, scrollController) =>
+                  FolderSidebar(state: _state, scrollController: scrollController),
+              bottom: Padding(
+                padding: const EdgeInsets.all(8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: PushButton(
+                    controlSize: ControlSize.large,
+                    onPressed: _openFolder,
+                    child: const Text('폴더 열기'),
+                  ),
                 ),
               ),
             ),
-          ),
-          child: MacosScaffold(
-            toolBar: ToolBar(
-              title: Text(root != null ? p.basename(root) : 'Photo Manager'),
-              titleWidth: 240,
-              actions: [
-                ToolBarIconButton(
-                  label: '폴더 열기',
-                  icon: const MacosIcon(CupertinoIcons.folder_badge_plus),
-                  tooltipMessage: '폴더 열기',
-                  onPressed: _openFolder,
-                  showLabel: false,
+            child: MacosScaffold(
+              toolBar: ToolBar(
+                title: Text(root != null ? p.basename(root) : 'Photo Manager'),
+                titleWidth: 220,
+                actions: [
+                  ToolBarIconButton(
+                    label: '정보',
+                    icon: const MacosIcon(CupertinoIcons.info_circle),
+                    tooltipMessage: '정보 패널',
+                    onPressed: () => setState(() => _showInfo = !_showInfo),
+                    showLabel: false,
+                  ),
+                  ToolBarIconButton(
+                    label: '폴더 열기',
+                    icon: const MacosIcon(CupertinoIcons.folder_badge_plus),
+                    tooltipMessage: '폴더 열기',
+                    onPressed: _openFolder,
+                    showLabel: false,
+                  ),
+                ],
+              ),
+              children: [
+                ContentArea(
+                  builder: (context, scrollController) => _buildBody(),
                 ),
               ],
             ),
-            children: [
-              ContentArea(
-                builder: (context, scrollController) => _buildContent(),
-              ),
-            ],
-          ),
           ),
         );
       },
     );
   }
 
-  Widget _buildContent() {
-    if (_state.loading) {
-      return const Center(child: ProgressCircle());
-    }
+  Widget _buildBody() {
+    if (_state.loading) return const Center(child: ProgressCircle());
     if (_state.root == null) {
-      return _EmptyState(
-        message: '시작하려면 사진 폴더를 여세요.',
-        onOpen: _openFolder,
-      );
+      return _EmptyState(message: '시작하려면 사진 폴더를 여세요.', onOpen: _openFolder);
     }
-    if (_state.currentImages.isEmpty) {
+    if (_state.folders.isEmpty) {
       return _EmptyState(
-        message: _state.error ?? '이 폴더에는 이미지가 없습니다.',
-        onOpen: _openFolder,
-      );
+          message: _state.error ?? '이 폴더에는 이미지가 없습니다.', onOpen: _openFolder);
     }
-    return PhotoGrid(imagePaths: _state.currentImages);
+
+    final infoPath = _state.selectedCount == 1 ? _state.selection.first : null;
+    return Focus(
+      focusNode: _keyboardFocus,
+      autofocus: true,
+      onKeyEvent: _onKey,
+      child: Column(
+        children: [
+          ControlBar(state: _state),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(child: PhotoGrid(state: _state)),
+                if (_showInfo) InfoPanel(path: infoPath),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
