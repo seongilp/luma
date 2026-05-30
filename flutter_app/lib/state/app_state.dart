@@ -886,10 +886,22 @@ class AppState extends ChangeNotifier {
     return failed.isEmpty ? null : '${failed.length}개를 삭제하지 못했습니다.';
   }
 
-  Future<void> deleteOne(String path) async {
-    final failed = await FileOps.moveToTrash([path]);
-    if (!failed.contains(path)) await meta.remove(path);
+  Future<void> deleteOne(String path) async => deletePaths([path]);
+
+  Future<void> deletePaths(List<String> paths) async {
+    if (paths.isEmpty) return;
+    final failed = await FileOps.moveToTrash(paths);
+    for (final p in paths) {
+      if (!failed.contains(p)) await meta.remove(p);
+    }
     await _rescanKeepingFolder();
+  }
+
+  /// 묶음에서 가장 큰(고해상도일 가능성) 1장만 남기고 나머지를 휴지통으로.
+  Future<void> keepBestInGroup(List<PhotoItem> group) async {
+    if (group.length < 2) return;
+    final sorted = [...group]..sort((a, b) => b.sizeBytes.compareTo(a.sizeBytes));
+    await deletePaths([for (final it in sorted.skip(1)) it.path]);
   }
 
   Future<String?> renameOne(String path, String newName) async {

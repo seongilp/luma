@@ -6,6 +6,7 @@ import 'package:macos_ui/macos_ui.dart';
 import '../models/photo_item.dart';
 import '../state/app_state.dart';
 import 'analysis_overlay.dart';
+import 'dialogs.dart';
 import 'photo_tile.dart';
 import 'photo_viewer.dart';
 import 'scroll_area.dart';
@@ -112,6 +113,13 @@ class _Group extends StatelessWidget {
     ));
   }
 
+  Future<void> _cleanup(BuildContext context) async {
+    final ok = await confirm(context,
+        title: '중복 정리',
+        message: '이 묶음에서 가장 큰 1장만 남기고 ${items.length - 1}장을 휴지통으로 보낼까요?');
+    if (ok) await state.keepBestInGroup(items);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -127,9 +135,13 @@ class _Group extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text('유사 사진 ${items.length}장',
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                const SizedBox(width: 8),
-                const Text('· 베스트만 남기고 정리하세요',
-                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                const SizedBox(width: 10),
+                PushButton(
+                  controlSize: ControlSize.small,
+                  secondary: true,
+                  onPressed: () => _cleanup(context),
+                  child: const Text('1장만 남기고 정리'),
+                ),
               ],
             ),
           ),

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart' show Colors;
 import 'package:flutter/widgets.dart';
 import 'package:macos_ui/macos_ui.dart';
 
+import '../models/folder_group.dart';
 import '../services/exif_reader.dart';
+import 'histogram_chart.dart';
 
 /// 우측 정보 패널: 선택한 사진 1장의 EXIF/파일 정보.
 class InfoPanel extends StatelessWidget {
@@ -41,6 +43,13 @@ class InfoPanel extends StatelessWidget {
                       child: Text('정보',
                           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                     ),
+                    if (!isVideoFile(p)) ...[
+                      const Text('히스토그램',
+                          style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      const SizedBox(height: 6),
+                      HistogramChart(path: p),
+                      const SizedBox(height: 14),
+                    ],
                     for (final row in info.rows) _InfoRow(label: row.key, value: row.value),
                   ],
                 );

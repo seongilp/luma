@@ -7,6 +7,7 @@ import 'package:macos_ui/macos_ui.dart';
 import '../models/sort_filter.dart';
 import '../services/file_ops.dart';
 import '../state/app_state.dart';
+import 'compare_view.dart';
 import 'dialogs.dart';
 import 'export_presets.dart';
 
@@ -58,6 +59,12 @@ class ControlBar extends StatelessWidget {
     return [
       Text('${state.selectedCount}개 선택', style: const TextStyle(fontSize: 13)),
       const SizedBox(width: 10),
+      _ActionBtn(
+        icon: CupertinoIcons.rectangle_split_3x1,
+        tip: '비교 (2~4장)',
+        enabled: state.selectedCount >= 2 && state.selectedCount <= 4,
+        onTap: () => _compare(context),
+      ),
       _ActionBtn(icon: CupertinoIcons.heart, tip: '즐겨찾기', onTap: state.favoriteSelected),
       _ActionBtn(
         icon: CupertinoIcons.pencil,
@@ -102,6 +109,17 @@ class ControlBar extends StatelessWidget {
     } else {
       await state.moveSelected(dest);
     }
+  }
+
+  void _compare(BuildContext context) {
+    final paths = [
+      for (final it in state.visibleItems)
+        if (state.isSelected(it.path) && !it.isVideo) it.path
+    ];
+    if (paths.length < 2) return;
+    Navigator.of(context).push(PageRouteBuilder(
+      pageBuilder: (_, _, _) => CompareView(paths: paths),
+    ));
   }
 
   Future<void> _export(BuildContext context) async {

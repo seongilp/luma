@@ -75,6 +75,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
   }
 
   bool _ocrBusy = false;
+  bool _filmstrip = false;
 
   Future<void> _runOcr() async {
     if (_ocrBusy) return;
@@ -175,6 +176,12 @@ class _PhotoViewerState extends State<PhotoViewer> {
             itemBuilder: (context, i) {
               final path = widget.paths[i];
               if (isVideoFile(path)) return _VideoView(key: ValueKey(path), path: path);
+              if (isRawFile(path)) {
+                return const Center(
+                  child: Text('RAW 파일은 미리보기를 지원하지 않습니다',
+                      style: TextStyle(color: Colors.white70, fontSize: 16)),
+                );
+              }
               return InteractiveViewer(
                 minScale: 1,
                 maxScale: 5,
@@ -200,8 +207,11 @@ class _PhotoViewerState extends State<PhotoViewer> {
               ),
             ),
           ),
-          _NavButton(alignment: Alignment.centerLeft, icon: Icons.chevron_left, onTap: () => _move(-1)),
-          _NavButton(alignment: Alignment.centerRight, icon: Icons.chevron_right, onTap: () => _move(1)),
+          if (!_filmstrip) ...[
+            _NavButton(alignment: Alignment.centerLeft, icon: Icons.chevron_left, onTap: () => _move(-1)),
+            _NavButton(alignment: Alignment.centerRight, icon: Icons.chevron_right, onTap: () => _move(1)),
+          ],
+          if (_filmstrip) _buildFilmstrip(),
           // 빠른 리뷰 하트 플래시
           IgnorePointer(
             child: AnimatedOpacity(
@@ -215,6 +225,51 @@ class _PhotoViewerState extends State<PhotoViewer> {
           ),
           _bottomBar(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFilmstrip() {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 70,
+      child: Container(
+        height: 72,
+        color: Colors.black.withValues(alpha: 0.5),
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          itemCount: widget.paths.length,
+          itemBuilder: (context, i) {
+            final sel = i == _index;
+            final path = widget.paths[i];
+            return GestureDetector(
+              onTap: () => _controller.jumpToPage(i),
+              child: Container(
+                width: 60,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                      color: sel ? Colors.white : Colors.transparent, width: 2),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: isVideoFile(path)
+                      ? Container(
+                          color: const Color(0xFF26262B),
+                          child: const Icon(CupertinoIcons.play_fill,
+                              color: Colors.white70, size: 18))
+                      : Image.file(File(path),
+                          fit: BoxFit.cover, cacheWidth: 120,
+                          errorBuilder: (_, _, _) =>
+                              Container(color: const Color(0xFF3A3A40))),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -259,6 +314,12 @@ class _PhotoViewerState extends State<PhotoViewer> {
                       ),
                     );
                   }),
+                  const SizedBox(width: 14),
+                  _BarIcon(
+                    icon: CupertinoIcons.rectangle_grid_1x2,
+                    color: _filmstrip ? Colors.blueAccent : Colors.white,
+                    onTap: () => setState(() => _filmstrip = !_filmstrip),
+                  ),
                   if (!isVideoFile(path)) ...[
                     const SizedBox(width: 14),
                     _BarIcon(

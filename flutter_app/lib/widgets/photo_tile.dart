@@ -87,17 +87,28 @@ class _PhotoTileState extends State<PhotoTile> {
                                 color: Colors.white70, size: 34),
                           ),
                         )
-                      : Image.file(
-                          File(path),
-                          fit: BoxFit.cover,
-                          cacheWidth: widget.decodeWidth.round(),
-                          filterQuality: FilterQuality.medium,
-                          errorBuilder: (_, _, _) => Container(
-                            color: const Color(0xFF3A3A40),
-                            child: const Icon(CupertinoIcons.exclamationmark_triangle,
-                                color: Colors.grey, size: 20),
-                          ),
-                        ),
+                      : widget.item.isRaw
+                          ? Container(
+                              color: const Color(0xFF2A2A30),
+                              child: const Center(
+                                child: Text('RAW',
+                                    style: TextStyle(
+                                        color: Colors.white54,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16)),
+                              ),
+                            )
+                          : Image.file(
+                              File(path),
+                              fit: BoxFit.cover,
+                              cacheWidth: widget.decodeWidth.round(),
+                              filterQuality: FilterQuality.medium,
+                              errorBuilder: (_, _, _) => Container(
+                                color: const Color(0xFF3A3A40),
+                                child: const Icon(CupertinoIcons.exclamationmark_triangle,
+                                    color: Colors.grey, size: 20),
+                              ),
+                            ),
                 ),
               ),
             ),
@@ -125,6 +136,23 @@ class _PhotoTileState extends State<PhotoTile> {
                 child: _StarRow(
                   rating: meta.rating,
                   onRate: (r) => state.setRating(path, r),
+                ),
+              ),
+
+            // RAW 페어 배지
+            if (widget.item.rawPath != null)
+              Positioned(
+                bottom: 6,
+                right: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text('RAW',
+                      style: TextStyle(
+                          color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                 ),
               ),
           ],
