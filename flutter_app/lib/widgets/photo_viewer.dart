@@ -28,6 +28,7 @@ class PhotoViewer extends StatefulWidget {
 class _PhotoViewerState extends State<PhotoViewer> {
   late final PageController _controller;
   late int _index;
+  late List<String> _paths; // 삭제 시 줄어들 수 있어 로컬 가변 복사본
   final _focus = FocusNode();
 
   // 컨트롤 auto-hide: 마우스가 멈추면 숨기고, 움직이면 다시 보인다.
@@ -37,7 +38,8 @@ class _PhotoViewerState extends State<PhotoViewer> {
   @override
   void initState() {
     super.initState();
-    _index = widget.initialIndex;
+    _paths = List.of(widget.paths);
+    _index = widget.initialIndex.clamp(0, _paths.isEmpty ? 0 : _paths.length - 1);
     _controller = PageController(initialPage: _index);
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
     _pokeChrome();
@@ -71,7 +73,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
   }
 
   void _move(int delta) {
-    final next = (_index + delta).clamp(0, widget.paths.length - 1);
+    final next = (_index + delta).clamp(0, _paths.length - 1);
     if (next != _index) {
       _controller.animateToPage(next,
           duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
@@ -83,7 +85,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
 
   /// 빠른 리뷰: 현재 사진을 즐겨찾기(이미 즐겨찾기면 유지)하고 다음으로.
   void _favoriteAndNext() {
-    final path = widget.paths[_index];
+    final path = _paths[_index];
     if (!widget.state.meta.get(path).favorite) {
       widget.state.toggleFavorite(path);
     }
@@ -95,10 +97,25 @@ class _PhotoViewerState extends State<PhotoViewer> {
     _move(1);
   }
 
+  /// 현재 사진을 휴지통으로 보내고 다음 사진으로 이어서 본다(마지막이면 닫기).
   Future<void> _deleteCurrent() async {
-    final path = widget.paths[_index];
-    await widget.state.deleteOne(path);
-    if (mounted) Navigator.of(context).maybePop();
+    if (_paths.isEmpty) return;
+    final path = _paths[_index];
+    await widget.state.deleteOne(path); // 휴지통 이동 + 라이브러리 재스캔
+    if (!mounted) return;
+    setState(() {
+      _paths.removeAt(_index);
+      if (_paths.isNotEmpty && _index >= _paths.length) {
+        _index = _paths.length - 1;
+      }
+    });
+    if (_paths.isEmpty) {
+      Navigator.of(context).maybePop();
+    } else if (_controller.hasClients) {
+      // PageView 페이지를 새 인덱스에 맞춘다.
+      _controller.jumpToPage(_index);
+      _pokeChrome();
+    }
   }
 
   bool _ocrBusy = false;
@@ -108,7 +125,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
   Future<void> _runQuickCheck() async {
     if (_qcBusy) return;
     setState(() => _qcBusy = true);
-    final result = await widget.state.quickCheck(widget.paths[_index]);
+    final result = await widget.state.quickCheck(_paths[_index]);
     if (!mounted) return;
     setState(() => _qcBusy = false);
     await _showTextSheet('AI Quick Check', result ?? '점검 결과를 받지 못했습니다.', copyable: false);
@@ -161,7 +178,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
   Future<void> _runOcr() async {
     if (_ocrBusy) return;
     setState(() => _ocrBusy = true);
-    final lines = await VisionService.ocr(widget.paths[_index]);
+    final lines = await VisionService.ocr(_paths[_index]);
     if (!mounted) return;
     setState(() => _ocrBusy = false);
     final text = lines.join('\n');
@@ -225,8 +242,12 @@ class _PhotoViewerState extends State<PhotoViewer> {
       case LogicalKeyboardKey.escape:
         Navigator.of(context).maybePop();
         return KeyEventResult.handled;
+      case LogicalKeyboardKey.delete:
+      case LogicalKeyboardKey.backspace:
+        _deleteCurrent(); // 휴지통으로 보내고 다음 사진
+        return KeyEventResult.handled;
       case LogicalKeyboardKey.keyF:
-        widget.state.toggleFavorite(widget.paths[_index]);
+        widget.state.toggleFavorite(_paths[_index]);
         return KeyEventResult.handled;
       case LogicalKeyboardKey.space:
         // 빠른 리뷰: 즐겨찾기 표시 후 다음 사진으로.
@@ -254,13 +275,13 @@ class _PhotoViewerState extends State<PhotoViewer> {
           ),
           PageView.builder(
             controller: _controller,
-            itemCount: widget.paths.length,
+            itemCount: _paths.length,
             onPageChanged: (i) {
               setState(() => _index = i);
               _pokeChrome();
             },
             itemBuilder: (context, i) {
-              final path = widget.paths[i];
+              final path = _paths[i];
               if (isVideoFile(path)) return _VideoView(key: ValueKey(path), path: path);
               if (isRawFile(path)) {
                 return const Center(
@@ -292,7 +313,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('${_index + 1} / ${widget.paths.length}',
+                    Text('${_index + 1} / ${_paths.length}',
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 13,
@@ -360,10 +381,10 @@ class _PhotoViewerState extends State<PhotoViewer> {
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          itemCount: widget.paths.length,
+          itemCount: _paths.length,
           itemBuilder: (context, i) {
             final sel = i == _index;
-            final path = widget.paths[i];
+            final path = _paths[i];
             return GestureDetector(
               onTap: () => _controller.jumpToPage(i),
               child: Container(
@@ -403,7 +424,7 @@ class _PhotoViewerState extends State<PhotoViewer> {
         child: ListenableBuilder(
           listenable: widget.state,
           builder: (context, _) {
-            final path = widget.paths[_index];
+            final path = _paths[_index];
             final meta = widget.state.meta.get(path);
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
