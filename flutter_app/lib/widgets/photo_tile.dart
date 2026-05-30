@@ -79,17 +79,25 @@ class _PhotoTileState extends State<PhotoTile> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    File(path),
-                    fit: BoxFit.cover,
-                    cacheWidth: widget.decodeWidth.round(),
-                    filterQuality: FilterQuality.medium,
-                    errorBuilder: (_, _, _) => Container(
-                      color: const Color(0xFF3A3A40),
-                      child: const Icon(CupertinoIcons.exclamationmark_triangle,
-                          color: Colors.grey, size: 20),
-                    ),
-                  ),
+                  child: widget.item.isVideo
+                      ? Container(
+                          color: const Color(0xFF26262B),
+                          child: const Center(
+                            child: Icon(CupertinoIcons.play_circle_fill,
+                                color: Colors.white70, size: 34),
+                          ),
+                        )
+                      : Image.file(
+                          File(path),
+                          fit: BoxFit.cover,
+                          cacheWidth: widget.decodeWidth.round(),
+                          filterQuality: FilterQuality.medium,
+                          errorBuilder: (_, _, _) => Container(
+                            color: const Color(0xFF3A3A40),
+                            child: const Icon(CupertinoIcons.exclamationmark_triangle,
+                                color: Colors.grey, size: 20),
+                          ),
+                        ),
                 ),
               ),
             ),

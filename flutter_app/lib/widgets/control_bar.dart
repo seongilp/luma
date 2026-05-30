@@ -5,8 +5,10 @@ import 'package:flutter/widgets.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 import '../models/sort_filter.dart';
+import '../services/file_ops.dart';
 import '../state/app_state.dart';
 import 'dialogs.dart';
+import 'export_presets.dart';
 
 /// 그리드 위 컨트롤 스트립.
 /// 왼쪽: 선택 시 작업 버튼(삭제·이름변경·이동·복사·즐겨찾기).
@@ -65,6 +67,13 @@ class ControlBar extends StatelessWidget {
       ),
       _ActionBtn(icon: CupertinoIcons.folder, tip: '이동', onTap: () => _move(context, copy: false)),
       _ActionBtn(icon: CupertinoIcons.doc_on_doc, tip: '복사', onTap: () => _move(context, copy: true)),
+      _ActionBtn(icon: CupertinoIcons.square_arrow_up, tip: '내보내기', onTap: () => _export(context)),
+      _ActionBtn(
+        icon: CupertinoIcons.macwindow,
+        tip: 'Finder에서 보기',
+        enabled: state.selectedCount == 1,
+        onTap: () => FileOps.showInFinder(state.selection.first),
+      ),
       _ActionBtn(icon: CupertinoIcons.delete, tip: '삭제(휴지통)', danger: true, onTap: () => _delete(context)),
       const SizedBox(width: 8),
       _ActionBtn(icon: CupertinoIcons.clear, tip: '선택 해제', onTap: state.clearSelection),
@@ -93,6 +102,19 @@ class ControlBar extends StatelessWidget {
     } else {
       await state.moveSelected(dest);
     }
+  }
+
+  Future<void> _export(BuildContext context) async {
+    final fmt = await pickExportFormat(context);
+    if (fmt == null) return;
+    final dest = await getDirectoryPath(confirmButtonText: '여기로 내보내기');
+    if (dest == null) return;
+    await FileOps.exportImages(
+      state.selection.toList(),
+      dest,
+      format: fmt.format,
+      maxDim: fmt.maxDim,
+    );
   }
 
   // ── 별점/즐겨찾기 필터 ────────────────────────────────────

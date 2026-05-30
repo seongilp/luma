@@ -1,3 +1,4 @@
+import '../services/natural_sort.dart';
 import 'photo_item.dart';
 import 'photo_meta.dart';
 
@@ -47,7 +48,7 @@ List<PhotoItem> applySortFilter(
   }).toList();
 
   int cmp(PhotoItem a, PhotoItem b) => switch (field) {
-        SortField.name => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        SortField.name => naturalCompare(a.name, b.name),
         SortField.modified => a.modified.compareTo(b.modified),
         SortField.size => a.sizeBytes.compareTo(b.sizeBytes),
       };

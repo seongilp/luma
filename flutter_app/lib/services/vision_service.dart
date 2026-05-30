@@ -37,6 +37,17 @@ class VisionService {
     }
   }
 
+  /// 온디바이스 OCR: 사진 속 텍스트를 줄 단위로 인식.
+  static Future<List<String>> ocr(String path) async {
+    try {
+      final res = await _channel.invokeMethod('ocr', {'path': path});
+      if (res is! List) return [];
+      return [for (final s in res) s.toString()];
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// 사진의 Vision 특징벡터. 미지원/실패 시 null.
   static Future<List<double>?> featurePrint(String path) async {
     try {

@@ -30,6 +30,12 @@ class MainFlutterWindow: NSWindow {
           let faces = VisionBridge.faces(forPath: path)
           DispatchQueue.main.async { result(faces) }
         }
+      case "ocr":
+        let path = (call.arguments as? [String: Any])?["path"] as? String ?? ""
+        DispatchQueue.global(qos: .userInitiated).async {
+          let lines = VisionBridge.ocr(forPath: path)
+          DispatchQueue.main.async { result(lines) }
+        }
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -110,5 +116,22 @@ enum VisionBridge {
       ])
     }
     return out
+  }
+
+  /// 온디바이스 OCR: 사진 속 텍스트를 줄 단위로 인식한다 (한국어+영어).
+  static func ocr(forPath path: String) -> [String] {
+    let url = URL(fileURLWithPath: path)
+    guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+          let cg = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return [] }
+    let req = VNRecognizeTextRequest()
+    req.recognitionLevel = .accurate
+    req.usesLanguageCorrection = true
+    if #available(macOS 13.0, *) {
+      req.recognitionLanguages = ["ko-KR", "en-US"]
+    }
+    let handler = VNImageRequestHandler(cgImage: cg, options: [:])
+    try? handler.perform([req])
+    guard let results = req.results else { return [] }
+    return results.compactMap { $0.topCandidates(1).first?.string }
   }
 }

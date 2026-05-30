@@ -1,8 +1,44 @@
 import 'dart:io';
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
 /// 로컬 파일 작업. 삭제는 영구 삭제 대신 **macOS 휴지통으로 이동**(복구 가능).
 class FileOps {
+  /// Finder에서 해당 파일을 선택해 보여준다.
+  static Future<void> showInFinder(String path) async {
+    try {
+      await Process.run('open', ['-R', path]);
+    } catch (_) {}
+  }
+
+  /// 선택 이미지를 JPEG/PNG로 내보낸다(선택적 긴 변 축소). 내보낸 개수 반환.
+  static Future<int> exportImages(
+    List<String> paths,
+    String destDir, {
+    required String format, // 'jpg' | 'png'
+    int? maxDim,
+  }) async {
+    var n = 0;
+    for (final src in paths) {
+      try {
+        final bytes = await File(src).readAsBytes();
+        var image = img.decodeImage(bytes);
+        if (image == null) continue;
+        if (maxDim != null && (image.width > maxDim || image.height > maxDim)) {
+          image = image.width >= image.height
+              ? img.copyResize(image, width: maxDim)
+              : img.copyResize(image, height: maxDim);
+        }
+        final out = format == 'png' ? img.encodePng(image) : img.encodeJpg(image, quality: 90);
+        final base = p.basenameWithoutExtension(src);
+        final target = await _uniqueTarget(destDir, '$base.$format');
+        await File(target).writeAsBytes(out);
+        n++;
+      } catch (_) {}
+    }
+    return n;
+  }
+
   /// 선택 항목들을 휴지통으로 보낸다. Finder를 통해 처리해 복구 가능.
   /// 실패한 경로 목록을 반환한다 (빈 리스트 = 전부 성공).
   static Future<List<String>> moveToTrash(List<String> paths) async {

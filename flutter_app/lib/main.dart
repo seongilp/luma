@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:macos_ui/macos_ui.dart';
 
+import 'services/zip_service.dart';
 import 'state/app_state.dart';
 import 'widgets/control_bar.dart';
 import 'widgets/date_view.dart';
@@ -135,6 +136,14 @@ class _HomePageState extends State<HomePage> {
     if (dir != null) await _state.openRoot(dir);
   }
 
+  Future<void> _openZip() async {
+    const group = XTypeGroup(label: 'ZIP', extensions: ['zip']);
+    final file = await openFile(acceptedTypeGroups: [group]);
+    if (file == null) return;
+    final dir = await extractZipToTemp(file.path);
+    if (dir != null) await _state.openRoot(dir);
+  }
+
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
@@ -228,6 +237,13 @@ class _HomePageState extends State<HomePage> {
                     icon: const MacosIcon(CupertinoIcons.folder_badge_plus),
                     tooltipMessage: '폴더 열기',
                     onPressed: _openFolder,
+                    showLabel: false,
+                  ),
+                  ToolBarIconButton(
+                    label: 'ZIP 열기',
+                    icon: const MacosIcon(CupertinoIcons.archivebox),
+                    tooltipMessage: 'ZIP 열기',
+                    onPressed: _openZip,
                     showLabel: false,
                   ),
                   ToolBarIconButton(

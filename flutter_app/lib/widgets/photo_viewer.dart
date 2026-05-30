@@ -2,7 +2,11 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:macos_ui/macos_ui.dart' show MacosSheet, PushButton, ControlSize, showMacosSheet;
+import 'package:video_player/video_player.dart';
 
+import '../models/folder_group.dart';
+import '../services/vision_service.dart';
 import '../state/app_state.dart';
 
 /// 전체 화면 큰 보기. 좌우 이동, Esc 닫기, 핀치 줌, 즐겨찾기·별점·삭제.
@@ -70,6 +74,66 @@ class _PhotoViewerState extends State<PhotoViewer> {
     if (mounted) Navigator.of(context).maybePop();
   }
 
+  bool _ocrBusy = false;
+
+  Future<void> _runOcr() async {
+    if (_ocrBusy) return;
+    setState(() => _ocrBusy = true);
+    final lines = await VisionService.ocr(widget.paths[_index]);
+    if (!mounted) return;
+    setState(() => _ocrBusy = false);
+    final text = lines.join('\n');
+    await showMacosSheet(
+      context: context,
+      builder: (ctx) => MacosSheet(
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('인식된 텍스트',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460, maxHeight: 360),
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    text.isEmpty ? '인식된 텍스트가 없습니다.' : text,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  PushButton(
+                    controlSize: ControlSize.large,
+                    secondary: true,
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('닫기'),
+                  ),
+                  const SizedBox(width: 10),
+                  PushButton(
+                    controlSize: ControlSize.large,
+                    onPressed: text.isEmpty
+                        ? null
+                        : () {
+                            Clipboard.setData(ClipboardData(text: text));
+                            Navigator.of(ctx).pop();
+                          },
+                    child: const Text('복사'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     switch (event.logicalKey) {
@@ -108,13 +172,17 @@ class _PhotoViewerState extends State<PhotoViewer> {
             controller: _controller,
             itemCount: widget.paths.length,
             onPageChanged: (i) => setState(() => _index = i),
-            itemBuilder: (context, i) => InteractiveViewer(
-              minScale: 1,
-              maxScale: 5,
-              child: Center(
-                child: Image.file(File(widget.paths[i]), fit: BoxFit.contain),
-              ),
-            ),
+            itemBuilder: (context, i) {
+              final path = widget.paths[i];
+              if (isVideoFile(path)) return _VideoView(key: ValueKey(path), path: path);
+              return InteractiveViewer(
+                minScale: 1,
+                maxScale: 5,
+                child: Center(
+                  child: Image.file(File(path), fit: BoxFit.contain),
+                ),
+              );
+            },
           ),
           Positioned(
             top: 16,
@@ -191,6 +259,14 @@ class _PhotoViewerState extends State<PhotoViewer> {
                       ),
                     );
                   }),
+                  if (!isVideoFile(path)) ...[
+                    const SizedBox(width: 14),
+                    _BarIcon(
+                      icon: _ocrBusy ? CupertinoIcons.hourglass : CupertinoIcons.textformat,
+                      color: Colors.white,
+                      onTap: _runOcr,
+                    ),
+                  ],
                   const SizedBox(width: 14),
                   _BarIcon(
                     icon: CupertinoIcons.delete,
@@ -201,6 +277,65 @@ class _PhotoViewerState extends State<PhotoViewer> {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// 뷰어 내 동영상 재생 (탭으로 재생/일시정지, 진행바).
+class _VideoView extends StatefulWidget {
+  final String path;
+  const _VideoView({super.key, required this.path});
+
+  @override
+  State<_VideoView> createState() => _VideoViewState();
+}
+
+class _VideoViewState extends State<_VideoView> {
+  late final VideoPlayerController _controller;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.file(File(widget.path))
+      ..initialize().then((_) {
+        if (!mounted) return;
+        setState(() => _ready = true);
+        _controller
+          ..setLooping(true)
+          ..play();
+      }).catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_ready) {
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
+    }
+    return Center(
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _controller.value.isPlaying ? _controller.pause() : _controller.play();
+        }),
+        child: AspectRatio(
+          aspectRatio: _controller.value.aspectRatio,
+          child: Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              VideoPlayer(_controller),
+              VideoProgressIndicator(_controller, allowScrubbing: true),
+              if (!_controller.value.isPlaying)
+                const Icon(CupertinoIcons.play_circle_fill, color: Colors.white70, size: 64),
+            ],
+          ),
         ),
       ),
     );

@@ -24,10 +24,18 @@ class FolderGroup {
 }
 
 const _imageExts = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'};
+const _videoExts = {'.mp4', '.mov', '.m4v'};
 
 bool isSupportedImage(String filePath) {
   return _imageExts.contains(p.extension(filePath).toLowerCase());
 }
+
+bool isVideoFile(String filePath) {
+  return _videoExts.contains(p.extension(filePath).toLowerCase());
+}
+
+bool isSupportedMedia(String filePath) =>
+    isSupportedImage(filePath) || isVideoFile(filePath);
 
 /// `root`를 재귀 스캔해 이미지를 **직속 디렉터리별로 묶어** 반환한다.
 /// 파일 통계(크기·수정일)도 함께 읽는다. 접근 불가 항목은 건너뛴다.
@@ -41,7 +49,7 @@ Future<List<FolderGroup>> scanFolders(String root) async {
   await for (final entity
       in stream.handleError((_) {}, test: (e) => e is FileSystemException)) {
     if (entity is! File) continue;
-    if (!isSupportedImage(entity.path)) continue;
+    if (!isSupportedMedia(entity.path)) continue;
     FileStat st;
     try {
       st = await entity.stat();
@@ -50,7 +58,12 @@ Future<List<FolderGroup>> scanFolders(String root) async {
     }
     final d = p.dirname(entity.path);
     byDir.putIfAbsent(d, () => []).add(
-          PhotoItem(path: entity.path, sizeBytes: st.size, modified: st.modified),
+          PhotoItem(
+            path: entity.path,
+            sizeBytes: st.size,
+            modified: st.modified,
+            isVideo: isVideoFile(entity.path),
+          ),
         );
   }
 

@@ -693,7 +693,8 @@ class AppState extends ChangeNotifier {
     _progressIndex = index;
     _progressTotal = total;
     _progressPath = path;
-    notifyListeners();
+    // 매 항목마다 전체 리빌드하면 느려지므로 몇 개마다 + 마지막에만 알림.
+    if (index % 4 == 0 || index >= total) notifyListeners();
   }
 
   void _clearProgress() {
