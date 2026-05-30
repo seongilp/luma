@@ -11,6 +11,36 @@ double l2Distance(List<double> a, List<double> b) {
   return sqrt(sum);
 }
 
+/// 거리 임계값으로 전체를 분할(싱글톤 포함)한다. 각 묶음은 인덱스 배열.
+/// (Claude 호출 절감: 묶음당 대표 1개만 보내기 위함)
+List<List<int>> partitionByDistance(List<List<double>?> vectors, double threshold) {
+  final n = vectors.length;
+  final parent = List<int>.generate(n, (i) => i);
+  int find(int x) {
+    while (parent[x] != x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  }
+
+  for (var i = 0; i < n; i++) {
+    final a = vectors[i];
+    if (a == null) continue;
+    for (var j = i + 1; j < n; j++) {
+      final b = vectors[j];
+      if (b == null) continue;
+      if (l2Distance(a, b) <= threshold) parent[find(i)] = find(j);
+    }
+  }
+
+  final groups = <int, List<int>>{};
+  for (var i = 0; i < n; i++) {
+    groups.putIfAbsent(find(i), () => []).add(i);
+  }
+  return groups.values.toList();
+}
+
 /// 인덱스별 벡터 목록을 거리 임계값 이하끼리 유니온-파인드로 묶는다.
 /// 2개 이상 묶음만, 큰 순으로 인덱스 배열 반환.
 List<List<int>> clusterByDistance(List<List<double>?> vectors, double threshold) {

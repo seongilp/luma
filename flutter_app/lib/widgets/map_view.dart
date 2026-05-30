@@ -77,8 +77,9 @@ class MapView extends StatelessWidget {
     final ok = await confirm(
       context,
       title: 'Claude로 위치 찾기',
-      message: '위치 없는 사진 $n장을 Claude(클라우드)로 보내 촬영 장소를 추정합니다.\n'
-          '사진이 외부(Anthropic 게이트웨이)로 전송됩니다.',
+      message: '위치 없는 사진 $n장의 촬영 장소를 Claude로 추정합니다.\n'
+          '비슷한 사진은 묶어 대표 1장만 전송해 토큰을 아낍니다.\n'
+          '(선택된 사진이 외부 Anthropic 게이트웨이로 전송됩니다)',
       confirmLabel: '추정 시작',
     );
     if (ok) await state.estimateLocationsWithClaude();

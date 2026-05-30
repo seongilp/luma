@@ -355,10 +355,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Claude(클라우드)로, 아직 위치 없는 사진의 촬영 장소를 추정한다.
-  /// 사진을 Anthropic(게이트웨이)로 보낸다 — 호출 전 사용자 동의 필요.
-  Future<void> estimateLocationsWithClaude() async {
-    if (_analyzing || !claudeConfigured) return;
+  /// 위치 없는 사진을 Claude(클라우드)에 보낼 때, 비슷한 사진끼리 묶어
+  /// **대표 1장만** 보내고 결과를 묶음 전체에 전파할 클러스터를 만든다.
+  /// 반환: 대표를 보낼 묶음 목록(각 묶음의 첫 항목이 대표). Vision 불가 시 1장씩.
+  Future<List<List<PhotoItem>>> _claudeClusters() async {
     final targets = [
       for (final it in _allItems)
         if (!_geo.containsKey(it.path) &&
@@ -366,18 +366,35 @@ class AppState extends ChangeNotifier {
             !_claudeGeo.containsKey(it.path))
           it
     ];
-    if (targets.isEmpty) return;
+    if (targets.isEmpty) return [];
+    final ok = await _ensureVectors('사진 묶는 중 (Claude 준비)');
+    if (!ok) return [for (final t in targets) [t]];
+    final vecs = [for (final t in targets) _vectors[t.path]];
+    final parts = partitionByDistance(vecs, _kLocationThreshold);
+    return [for (final p in parts) [for (final i in p) targets[i]]];
+  }
 
+  /// Claude로 위치 추정. 비슷한 사진은 묶어 대표만 전송(토큰 절감) 후 전파.
+  /// 호출 전 사용자 동의 필요(사진이 외부로 전송됨).
+  Future<void> estimateLocationsWithClaude() async {
+    if (_analyzing || !claudeConfigured) return;
     _analyzing = true;
     notifyListeners();
-    for (var i = 0; i < targets.length; i++) {
-      _setProgress('위치 분석 (Claude)', i + 1, targets.length, targets[i].path);
-      final loc = await _claude.identifyLocation(targets[i].path);
+
+    final groups = await _claudeClusters();
+    for (var i = 0; i < groups.length; i++) {
+      final rep = groups[i].first;
+      _setProgress('위치 분석 (Claude)', i + 1, groups.length, rep.path);
+      final loc = await _claude.identifyLocation(rep.path);
       if (loc != null && loc.hasCoords && loc.confidence >= 0.3) {
-        _claudeGeo[targets[i].path] = LatLng(loc.lat!, loc.lng!);
-        if (loc.place != null) _claudePlace[targets[i].path] = loc.place!;
+        final pos = LatLng(loc.lat!, loc.lng!);
+        for (final member in groups[i]) {
+          _claudeGeo[member.path] = pos;
+          if (loc.place != null) _claudePlace[member.path] = loc.place!;
+        }
       }
     }
+
     _analyzing = false;
     _clearProgress();
     notifyListeners();
