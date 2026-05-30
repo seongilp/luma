@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/app_settings.dart';
 import '../models/folder_group.dart';
+import '../models/folder_node.dart';
 import '../services/analysis_cache.dart';
 import '../models/photo_item.dart';
 import '../models/photo_meta.dart';
@@ -157,6 +158,10 @@ class AppState extends ChangeNotifier {
 
   LibraryView get view => _view;
   bool get isFolderView => _view == LibraryView.folder;
+
+  /// 사이드바용 디렉토리 트리 (루트 1개).
+  List<FolderNode> get folderTree =>
+      _root == null ? const [] : buildFolderTree(_root!, _folders);
 
   int get allCount => _allItems.length;
   int get favoriteCount =>
