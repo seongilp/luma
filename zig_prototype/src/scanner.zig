@@ -50,6 +50,77 @@ pub fn scan(io: Io, allocator: std.mem.Allocator, root: []const u8) ![][]const u
     return list.toOwnedSlice(allocator);
 }
 
+/// 한 폴더(디렉터리)에 속한 이미지 묶음. 사이드바 항목 1개에 대응.
+pub const Group = struct {
+    /// root 기준 상대 디렉터리 경로 ("" = root 직속). gpa 소유.
+    rel: []u8,
+    /// 해당 폴더 안 이미지들의 전체 경로. gpa 소유.
+    paths: [][]u8,
+};
+
+fn lessThanGroup(_: void, a: Group, b: Group) bool {
+    return std.mem.lessThan(u8, a.rel, b.rel);
+}
+
+/// 폴더를 재귀 스캔하되, 이미지를 **직속 디렉터리별로 묶어** 반환한다.
+/// 결과는 상대 경로 사전순 정렬. 호출자가 전체를 해제해야 한다 (freeGroups 사용).
+pub fn scanGrouped(io: Io, allocator: std.mem.Allocator, root: []const u8) ![]Group {
+    var map = std.StringHashMap(std.ArrayList([]u8)).init(allocator);
+    defer {
+        var it = map.iterator();
+        while (it.next()) |e| {
+            allocator.free(e.key_ptr.*);
+            for (e.value_ptr.items) |p| allocator.free(p);
+            e.value_ptr.deinit(allocator);
+        }
+        map.deinit();
+    }
+
+    var dir = Io.Dir.cwd().openDir(io, root, .{ .iterate = true }) catch |err| {
+        std.log.err("폴더 열기 실패 '{s}': {s}", .{ root, @errorName(err) });
+        return err;
+    };
+    defer dir.close(io);
+
+    var walker = try dir.walk(allocator);
+    defer walker.deinit();
+
+    while (walker.next(io) catch null) |entry| {
+        if (entry.kind != .file) continue;
+        if (!isSupportedImage(entry.basename)) continue;
+
+        const reldir = std.fs.path.dirname(entry.path) orelse "";
+        const gop = try map.getOrPut(reldir);
+        if (!gop.found_existing) {
+            gop.key_ptr.* = try allocator.dupe(u8, reldir);
+            gop.value_ptr.* = .empty;
+        }
+        const full = try std.fs.path.join(allocator, &.{ root, entry.path });
+        try gop.value_ptr.append(allocator, full);
+    }
+
+    // 맵 → 정렬된 슬라이스로 옮긴다 (소유권 이전).
+    var groups = try allocator.alloc(Group, map.count());
+    var i: usize = 0;
+    var it = map.iterator();
+    while (it.next()) |e| {
+        groups[i] = .{ .rel = e.key_ptr.*, .paths = try e.value_ptr.toOwnedSlice(allocator) };
+        e.key_ptr.* = ""; // defer가 다시 free 못 하도록 비움
+        i += 1;
+    }
+    std.mem.sort(Group, groups, {}, lessThanGroup);
+    return groups;
+}
+
+pub fn freeGroups(allocator: std.mem.Allocator, groups: []Group) void {
+    for (groups) |g| {
+        allocator.free(g.rel);
+        for (g.paths) |p| allocator.free(p);
+        allocator.free(g.paths);
+    }
+    allocator.free(groups);
+}
+
 test "isSupportedImage: 확장자 판별" {
     try std.testing.expect(isSupportedImage("photo.jpg"));
     try std.testing.expect(isSupportedImage("photo.JPG"));
