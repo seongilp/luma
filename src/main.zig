@@ -43,6 +43,7 @@ pub fn main(init: std.process.Init) !void {
     c.InitWindow(1100, 760, "zig_photo");
     defer c.CloseWindow();
     c.SetTargetFPS(60);
+    c.SetExitKey(c.KEY_NULL); // ESC는 뷰어 닫기에 쓰므로 앱 종료 단축키 해제
 
     var mode: Mode = .grid;
     var scroll_y: f32 = 0;
