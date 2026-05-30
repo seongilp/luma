@@ -15,12 +15,16 @@ class AppSettings {
   /// 마지막으로 연 폴더 (다음 실행 시 자동 열기).
   String lastRoot;
 
+  /// 전체 UI 배율 (접근성 확대). 1.0 = 기본.
+  double uiScale;
+
   AppSettings({
     this.anthropicApiKey = '',
     this.anthropicBaseUrl = '',
     this.cfToken = '',
     this.claudeMaxCalls = 50,
     this.lastRoot = '',
+    this.uiScale = 1.0,
   });
 
   AppSettings copyWith({
@@ -29,6 +33,7 @@ class AppSettings {
     String? cfToken,
     int? claudeMaxCalls,
     String? lastRoot,
+    double? uiScale,
   }) =>
       AppSettings(
         anthropicApiKey: anthropicApiKey ?? this.anthropicApiKey,
@@ -36,6 +41,7 @@ class AppSettings {
         cfToken: cfToken ?? this.cfToken,
         claudeMaxCalls: claudeMaxCalls ?? this.claudeMaxCalls,
         lastRoot: lastRoot ?? this.lastRoot,
+        uiScale: uiScale ?? this.uiScale,
       );
 
   Map<String, dynamic> toJson() => {
@@ -44,6 +50,7 @@ class AppSettings {
         'cfToken': cfToken,
         'claudeMaxCalls': claudeMaxCalls,
         'lastRoot': lastRoot,
+        'uiScale': uiScale,
       };
 
   static AppSettings fromJson(Map<String, dynamic> j) => AppSettings(
@@ -52,6 +59,7 @@ class AppSettings {
         cfToken: j['cfToken'] as String? ?? '',
         claudeMaxCalls: (j['claudeMaxCalls'] as num?)?.toInt() ?? 50,
         lastRoot: j['lastRoot'] as String? ?? '',
+        uiScale: (j['uiScale'] as num?)?.toDouble() ?? 1.0,
       );
 }
 

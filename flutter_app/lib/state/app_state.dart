@@ -297,6 +297,21 @@ class AppState extends ChangeNotifier {
 
   AppSettings get settings => _settings;
 
+  // ── 접근성: 전체 UI 배율 ──────────────────────────────────
+  double get uiScale => _settings.uiScale;
+
+  void setUiScale(double s) {
+    final c = s.clamp(1.0, 2.0);
+    if (c == _settings.uiScale) return;
+    _settings = _settings.copyWith(uiScale: c);
+    _settingsStore.save(_settings);
+    notifyListeners();
+  }
+
+  void zoomInUi() => setUiScale(uiScale + 0.15);
+  void zoomOutUi() => setUiScale(uiScale - 0.15);
+  void resetUiScale() => setUiScale(1.0);
+
   Future<void> updateSettings(AppSettings s) async {
     _settings = s;
     await _settingsStore.save(s);

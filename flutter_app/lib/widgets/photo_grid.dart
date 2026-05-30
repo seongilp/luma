@@ -39,7 +39,7 @@ class PhotoGrid extends StatelessWidget {
           controller: controller,
           padding: const EdgeInsets.all(16),
           gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: state.thumbSize,
+            maxCrossAxisExtent: state.thumbSize * state.uiScale,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
           ),
@@ -47,7 +47,7 @@ class PhotoGrid extends StatelessWidget {
           itemBuilder: (context, index) => PhotoTile(
             state: state,
             item: items[index],
-            decodeWidth: state.thumbSize * 2,
+            decodeWidth: state.thumbSize * state.uiScale * 2,
             onOpen: () => _openViewer(context, index),
           ),
         ),

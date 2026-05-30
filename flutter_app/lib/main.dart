@@ -101,6 +101,8 @@ class _HomePageState extends State<HomePage> {
         if (Platform.environment['PHOTO_LIST'] != null) {
           _state.setGridMode(GridMode.list);
         }
+        final z = Platform.environment['PHOTO_ZOOM'];
+        if (z != null) _state.setUiScale(double.tryParse(z) ?? 1.6);
         if (Platform.environment['PHOTO_MAP'] != null) {
           await _state.showMap();
           await _state.estimateLocations();
@@ -165,6 +167,28 @@ class _HomePageState extends State<HomePage> {
     return KeyEventResult.ignored;
   }
 
+  /// 접근성 확대: Option + (확대) / Option − (축소) / Option 0 (원래대로). 앱 전역.
+  KeyEventResult _onZoomKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (!HardwareKeyboard.instance.isAltPressed) return KeyEventResult.ignored;
+    final k = event.logicalKey;
+    if (k == LogicalKeyboardKey.equal ||
+        k == LogicalKeyboardKey.add ||
+        k == LogicalKeyboardKey.numpadAdd) {
+      _state.zoomInUi();
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.minus || k == LogicalKeyboardKey.numpadSubtract) {
+      _state.zoomOutUi();
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.digit0 || k == LogicalKeyboardKey.numpad0) {
+      _state.resetUiScale();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   Future<void> _confirmDelete() async {
     final n = _state.selectedCount;
     final ok = await confirm(context,
@@ -191,7 +215,12 @@ class _HomePageState extends State<HomePage> {
       listenable: _state,
       builder: (context, _) {
         final root = _state.root;
-        return RepaintBoundary(
+        return MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(_state.uiScale)),
+          child: Focus(
+            onKeyEvent: _onZoomKey,
+            child: RepaintBoundary(
           key: _repaintKey,
           child: MacosWindow(
             sidebar: Sidebar(
@@ -263,6 +292,8 @@ class _HomePageState extends State<HomePage> {
                   builder: (context, scrollController) => _buildBody(),
                 ),
               ],
+            ),
+          ),
             ),
           ),
         );
