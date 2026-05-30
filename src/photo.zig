@@ -36,7 +36,20 @@ pub fn fitDims(w: i32, h: i32, max: i32) struct { w: i32, h: i32 } {
     return .{ .w = nw, .h = nh };
 }
 
-/// 디스크에서 이미지를 디코드해 썸네일 텍스처를 생성한다.
+/// 가운데 정사각으로 크롭할 영역을 계산한다 (cover 방식의 격자용).
+pub fn squareCrop(w: i32, h: i32) c.Rectangle {
+    const side = @min(w, h);
+    const sf: f32 = @floatFromInt(side);
+    return .{
+        .x = @floatFromInt(@divTrunc(w - side, 2)),
+        .y = @floatFromInt(@divTrunc(h - side, 2)),
+        .width = sf,
+        .height = sf,
+    };
+}
+
+/// 디스크에서 이미지를 디코드해 정사각 썸네일 텍스처를 생성한다.
+/// 가운데를 정사각으로 크롭(cover)해 격자가 균일하게 정렬되도록 한다.
 /// 실패(깨진/미지원 파일)하면 state를 .failed로 두고 크래시하지 않는다.
 pub fn loadThumbnail(photo: *Photo, thumb_px: i32) void {
     var img = c.LoadImage(photo.path.ptr);
@@ -47,8 +60,8 @@ pub fn loadThumbnail(photo: *Photo, thumb_px: i32) void {
     }
     defer c.UnloadImage(img);
 
-    const dims = fitDims(img.width, img.height, thumb_px);
-    c.ImageResize(&img, dims.w, dims.h);
+    c.ImageCrop(&img, squareCrop(img.width, img.height));
+    c.ImageResize(&img, thumb_px, thumb_px);
 
     const tex = c.LoadTextureFromImage(img);
     if (!c.IsTextureValid(tex)) {
@@ -56,7 +69,7 @@ pub fn loadThumbnail(photo: *Photo, thumb_px: i32) void {
         return;
     }
     photo.texture = tex;
-    photo.aspect = @as(f32, @floatFromInt(dims.w)) / @as(f32, @floatFromInt(dims.h));
+    photo.aspect = 1.0;
     photo.state = .loaded;
 }
 

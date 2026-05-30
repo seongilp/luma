@@ -70,38 +70,21 @@ pub const Grid = struct {
     }
 };
 
-/// 종횡비를 유지하며 thumb_px×thumb_px 칸 안에 들어가는 그리기 사각형.
-fn fittedRect(origin_x: f32, origin_y: f32, aspect: f32) c.Rectangle {
-    const box: f32 = @floatFromInt(thumb_px);
-    var w = box;
-    var h = box;
-    if (aspect >= 1.0) {
-        h = box / aspect;
-    } else {
-        w = box * aspect;
-    }
-    return .{
-        .x = origin_x + (box - w) / 2.0,
-        .y = origin_y + (box - h) / 2.0,
-        .width = w,
-        .height = h,
-    };
-}
-
-/// 보이는 범위의 썸네일을 그린다. 로드 전/실패는 placeholder로 표시한다.
-pub fn draw(grid: Grid, photos: []Photo, scroll_y: f32, viewport_h: f32, hovered: ?usize) void {
+/// 보이는 범위의 썸네일을 정사각 타일로 그린다 (cover 크롭이라 격자가 균일).
+/// `y_offset`은 그리드 영역의 화면상 시작 y (상단바 아래). 로드 전/실패는 placeholder.
+pub fn draw(grid: Grid, photos: []Photo, scroll_y: f32, y_offset: f32, viewport_h: f32, hovered: ?usize) void {
     const range = grid.visibleRange(scroll_y, viewport_h, photos.len);
+    const box: f32 = @floatFromInt(thumb_px);
     var i = range.start;
     while (i < range.end) : (i += 1) {
         const o = grid.cellOrigin(i);
         const x = o.x;
-        const y = o.y - scroll_y;
-        const box: f32 = @floatFromInt(thumb_px);
+        const y = y_offset + o.y - scroll_y;
 
         const photo = &photos[i];
         switch (photo.state) {
             .loaded => if (photo.texture) |tex| {
-                const dst = fittedRect(x, y, photo.aspect);
+                const dst = c.Rectangle{ .x = x, .y = y, .width = box, .height = box };
                 const src = c.Rectangle{
                     .x = 0,
                     .y = 0,
@@ -110,8 +93,8 @@ pub fn draw(grid: Grid, photos: []Photo, scroll_y: f32, viewport_h: f32, hovered
                 };
                 c.DrawTexturePro(tex, src, dst, .{ .x = 0, .y = 0 }, 0, c.WHITE);
             },
-            .failed => drawPlaceholder(x, y, box, photo.path, c.MAROON),
-            .unloaded => drawPlaceholder(x, y, box, "", c.LIGHTGRAY),
+            .failed => drawPlaceholder(x, y, box, photo.path, .{ .r = 60, .g = 40, .b = 44, .a = 255 }),
+            .unloaded => drawPlaceholder(x, y, box, "", .{ .r = 44, .g = 44, .b = 50, .a = 255 }),
         }
 
         if (hovered != null and hovered.? == i) {
