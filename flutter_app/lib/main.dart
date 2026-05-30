@@ -344,7 +344,8 @@ class _HomePageState extends State<HomePage> {
               child: Scaffold(
                 body: Row(
                   children: [
-                    if (!_sidebarCollapsed) ...[
+                    // 추가된 폴더가 있을 때만 사이드바 표시(빈 상태에선 메인만).
+                    if (_state.root != null && !_sidebarCollapsed) ...[
                       _Sidebar(
                         state: _state,
                         width: _sidebarWidth,
@@ -362,6 +363,7 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           _TopBar(
                             state: _state,
+                            hasSidebar: _state.root != null,
                             collapsed: _sidebarCollapsed,
                             onToggleSidebar: () => setState(
                                 () => _sidebarCollapsed = !_sidebarCollapsed),
@@ -571,6 +573,7 @@ class _SidebarResizerState extends State<_SidebarResizer> {
 /// 상단 바: 사이드바 접기 + 제목 + 이름 검색 + 동작 아이콘들.
 class _TopBar extends StatelessWidget {
   final AppState state;
+  final bool hasSidebar;
   final bool collapsed;
   final VoidCallback onToggleSidebar;
   final VoidCallback onToggleInfo;
@@ -579,6 +582,7 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onSettings;
   const _TopBar({
     required this.state,
+    required this.hasSidebar,
     required this.collapsed,
     required this.onToggleSidebar,
     required this.onToggleInfo,
@@ -596,13 +600,15 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.only(left: 12, right: 16),
       child: Row(
         children: [
-          IconButton(
-            tooltip: collapsed ? '사이드바 펼치기' : '사이드바 접기',
-            onPressed: onToggleSidebar,
-            visualDensity: VisualDensity.compact,
-            icon: Icon(CupertinoIcons.sidebar_left, color: cs.onSurfaceVariant),
-          ),
-          const SizedBox(width: 4),
+          if (hasSidebar) ...[
+            IconButton(
+              tooltip: collapsed ? '사이드바 펼치기' : '사이드바 접기',
+              onPressed: onToggleSidebar,
+              visualDensity: VisualDensity.compact,
+              icon: Icon(CupertinoIcons.sidebar_left, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(width: 4),
+          ],
           Text(
             state.root != null ? state.viewTitle : 'LUMA',
             style: Theme.of(context)
