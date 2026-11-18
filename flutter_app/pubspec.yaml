@@ -39,7 +39,7 @@ dependencies:
   exif: ^3.3.0
   intl: ^0.20.2
   flutter_map: ^8.3.0
-  latlong2: ^0.9.1
+  latlong2: ^0.10.0
   http: ^1.6.0
   image: ^4.8.0
   flutter_map_marker_cluster: ^8.2.2
